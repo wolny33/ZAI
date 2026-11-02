@@ -11,8 +11,11 @@ builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(connString));
 
 var app = builder.Build();
 
-// Create the database tables on startup
-await Db.ApplySchema(app.Services.GetRequiredService<NpgsqlDataSource>(), AppContext.BaseDirectory, app.Logger);
+// Create the database tables and the administrator account on startup
+var dataSource = app.Services.GetRequiredService<NpgsqlDataSource>();
+
+await Db.ApplySchema(dataSource, AppContext.BaseDirectory, app.Logger);
+await Db.SeedAdmin(dataSource, app.Configuration, app.Logger);
 
 
 // GET /api/health - check that the app is alive

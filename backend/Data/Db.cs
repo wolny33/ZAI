@@ -15,4 +15,34 @@ public static class Db
         await cmd.ExecuteNonQueryAsync();
         log.LogInformation("Database schema applied.");
     }
+
+    /// <summary>
+    /// Creates the administrator account from ADMIN_USERNAME / ADMIN_PASSWORD
+    /// if there is no administrator yet.
+    /// </summary>
+    public static async Task SeedAdmin(NpgsqlDataSource ds, IConfiguration config, ILogger log)
+    {
+        await using var exists = ds.CreateCommand("SELECT EXISTS (SELECT 1 FROM admin_users)");
+        if (await exists.ExecuteScalarAsync() is true)
+        {
+            return;
+        }
+
+        var username = config["ADMIN_USERNAME"] ?? "admin";
+        var password = config["ADMIN_PASSWORD"];
+        if (string.IsNullOrEmpty(password))
+        {
+            log.LogWarning("No administrator exists and ADMIN_PASSWORD is not set - skipping creation.");
+            return;
+        }
+
+        var hash = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 12);
+        await using var insert = ds.CreateCommand(
+            "INSERT INTO admin_users (username, password_hash) VALUES ($1, $2) ON CONFLICT (username) DO NOTHING");
+        insert.Parameters.AddWithValue(username);
+        insert.Parameters.AddWithValue(hash);
+        await insert.ExecuteNonQueryAsync();
+        log.LogInformation("Administrator '{Username}' created.", username);
+    }
+
 }
