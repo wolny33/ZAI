@@ -1,0 +1,58 @@
+# Manual API tests.
+# Set @host to the address printed by the running application and @password to your administrator password.
+
+@host = http://localhost:5091
+@admin = admin
+@password = PUT_ADMIN_PASSWORD_HERE
+
+### Health: 200 {"status":"ok"}
+GET {{host}}/api/health
+
+### Unknown address: 404 (Problem Details)
+GET {{host}}/api/does-not-exist
+
+### Login with an empty object: 400, both fields listed
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{}
+
+### Login with wrong field types: 400
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": 1, "password": true }
+
+### Login with invalid JSON: 400
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{nope
+
+### Login with a wrong Content-Type: 415
+POST {{host}}/api/auth/login
+Content-Type: text/plain
+
+{ "username": "admin", "password": "x" }
+
+### Login with a wrong password: 401
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{admin}}", "password": "wrong-password" }
+
+### Login with an unknown user: 401 (same message as a wrong password)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "nobody", "password": "wrong-password" }
+
+### Login with correct data: 200 with accessToken, tokenType "Bearer", expiresIn 28800
+# @name login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{admin}}", "password": "{{password}}" }
+
+###
+@token = {{login.response.body.$.accessToken}}
