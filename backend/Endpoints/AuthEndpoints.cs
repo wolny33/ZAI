@@ -39,7 +39,7 @@ namespace Backend.Endpoints
 
                 // bcrypt always runs (against DummyHash for an unknown user)
                 var passwordOk = BCrypt.Net.BCrypt.Verify(password, hash ?? DummyHash);
-                if (adminId is null || !passwordOk)
+                if (adminId == null || !passwordOk)
                 {
                     log.LogWarning("Failed login attempt for user '{Username}'.", username);
                     throw new ApiException(401, "Unauthorized", "Invalid username or password.", wwwAuthenticate: "Bearer");
@@ -64,6 +64,19 @@ namespace Backend.Endpoints
                 }
 
                 return Results.Json(new { accessToken = token, tokenType = "Bearer", expiresIn = TokenLifetimeSeconds });
+            });
+
+
+            // POST /api/auth/logout
+            app.MapPost("/api/auth/logout", async (HttpContext ctx, NpgsqlDataSource ds) =>
+            {
+                var session = await AdminAuth.Require(ctx, ds);
+
+                await using var revoke = ds.CreateCommand("DELETE FROM admin_sessions WHERE token_hash = @token_hash");
+                revoke.Parameters.AddWithValue("token_hash", session.TokenHash);
+                await revoke.ExecuteNonQueryAsync();
+
+                return Results.NoContent();
             });
 
         }

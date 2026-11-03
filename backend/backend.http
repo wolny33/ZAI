@@ -56,3 +56,22 @@ Content-Type: application/json
 
 ###
 @token = {{login.response.body.$.accessToken}}
+
+### Logout without a token: 401 with WWW-Authenticate: Bearer
+POST {{host}}/api/auth/logout
+
+### Logout with an unknown token: 401
+POST {{host}}/api/auth/logout
+Authorization: Bearer not-a-real-token
+
+### Logout with a wrong scheme: 401
+POST {{host}}/api/auth/logout
+Authorization: Basic YWRtaW46eA==
+
+### Logout with the token from the login request: 204 (send the login request first)
+POST {{host}}/api/auth/logout
+Authorization: Bearer {{token}}
+
+### Logout again with the same token: 401 (the session no longer exists)
+POST {{host}}/api/auth/logout
+Authorization: Bearer {{token}}
