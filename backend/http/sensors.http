@@ -1,0 +1,139 @@
+# Manual tests of sensors.
+# Pick the environment in the "env" list above the editor.
+# Variables come from http-client.env.json and http-client.env.json.user.
+
+### Login for the sensor tests: 200
+# @name sensorsLogin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{admin}}", "password": "{{password}}" }
+
+###
+@sensorsToken = {{sensorsLogin.response.body.$.accessToken}}
+
+### Create a series for the sensors: 201
+# @name sensorSeries
+POST {{host}}/api/series
+Authorization: Bearer {{sensorsToken}}
+Content-Type: application/json
+
+{ "name": "Sensor tests", "minValue": 0, "maxValue": 100, "color": "#2ca02c" }
+
+###
+@sensorSeriesId = {{sensorSeries.response.body.$.id}}
+
+### Register a sensor without a token: 401
+POST {{host}}/api/sensors
+Content-Type: application/json
+
+{ "name": "Thermometer", "seriesId": {{sensorSeriesId}} }
+
+### Register a sensor with an empty object: 400, two fields listed
+POST {{host}}/api/sensors
+Authorization: Bearer {{sensorsToken}}
+Content-Type: application/json
+
+{}
+
+### Register a sensor with wrong types: 400
+POST {{host}}/api/sensors
+Authorization: Bearer {{sensorsToken}}
+Content-Type: application/json
+
+{ "name": 1, "seriesId": "one" }
+
+### Register a sensor with a fractional series id: 400
+POST {{host}}/api/sensors
+Authorization: Bearer {{sensorsToken}}
+Content-Type: application/json
+
+{ "name": "Thermometer", "seriesId": 1.5 }
+
+### Register a sensor with an empty name: 422
+POST {{host}}/api/sensors
+Authorization: Bearer {{sensorsToken}}
+Content-Type: application/json
+
+{ "name": "", "seriesId": {{sensorSeriesId}} }
+
+### Register a sensor with a plain text body: 415
+POST {{host}}/api/sensors
+Authorization: Bearer {{sensorsToken}}
+Content-Type: text/plain
+
+name=Thermometer
+
+### Register a sensor for a series that does not exist: 422, seriesId listed
+POST {{host}}/api/sensors
+Authorization: Bearer {{sensorsToken}}
+Content-Type: application/json
+
+{ "name": "Thermometer", "seriesId": 999999999 }
+
+### Register a sensor: 201 with a Location header and the apiKey (43 characters)
+# @name createSensor
+POST {{host}}/api/sensors
+Authorization: Bearer {{sensorsToken}}
+Content-Type: application/json
+
+{ "name": "Thermometer", "seriesId": {{sensorSeriesId}} }
+
+###
+@sensorId = {{createSensor.response.body.$.id}}
+
+### List sensors without a token: 401
+GET {{host}}/api/sensors
+
+### List sensors: 200, the new sensor is there and nothing contains apiKey
+GET {{host}}/api/sensors
+Authorization: Bearer {{sensorsToken}}
+
+### Get the sensor without a token: 401
+GET {{host}}/api/sensors/{{sensorId}}
+
+### Get the sensor: 200, no apiKey, lastMeasurementAt is null
+GET {{host}}/api/sensors/{{sensorId}}
+Authorization: Bearer {{sensorsToken}}
+
+### Get a sensor that does not exist: 404
+GET {{host}}/api/sensors/999999999
+Authorization: Bearer {{sensorsToken}}
+
+### Unregister the sensor without a token: 401
+DELETE {{host}}/api/sensors/{{sensorId}}
+
+### Unregister a sensor that does not exist: 404
+DELETE {{host}}/api/sensors/999999999
+Authorization: Bearer {{sensorsToken}}
+
+### Unregister the sensor: 204
+DELETE {{host}}/api/sensors/{{sensorId}}
+Authorization: Bearer {{sensorsToken}}
+
+### Unregister the same sensor again: 404
+DELETE {{host}}/api/sensors/{{sensorId}}
+Authorization: Bearer {{sensorsToken}}
+
+### Get the unregistered sensor: 404
+GET {{host}}/api/sensors/{{sensorId}}
+Authorization: Bearer {{sensorsToken}}
+
+### Register a second sensor, which will be removed together with its series: 201
+# @name secondSensor
+POST {{host}}/api/sensors
+Authorization: Bearer {{sensorsToken}}
+Content-Type: application/json
+
+{ "name": "Second thermometer", "seriesId": {{sensorSeriesId}} }
+
+###
+@secondSensorId = {{secondSensor.response.body.$.id}}
+
+### Delete the series: 204 (its sensors disappear with it)
+DELETE {{host}}/api/series/{{sensorSeriesId}}
+Authorization: Bearer {{sensorsToken}}
+
+### Get the sensor of the deleted series: 404
+GET {{host}}/api/sensors/{{secondSensorId}}
+Authorization: Bearer {{sensorsToken}}

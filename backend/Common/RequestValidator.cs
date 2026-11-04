@@ -20,7 +20,8 @@ namespace Backend.Common
         public RequestValidator(JsonElement body) => _body = body;
 
         /// <summary>
-        /// Reads a required text field. Records an error and returns null if it is missing or not a string.
+        /// Reads a required text field. Records an error and 
+        /// returns an empty string if it is missing or not a string.
         /// </summary>
         public string GetRequiredString(string field, int minLength = 0, int maxLength = int.MaxValue)
         {
@@ -37,7 +38,7 @@ namespace Backend.Common
 
             var text = value.GetString() ?? string.Empty;
             CheckLength(field, text, minLength, maxLength);
-            return value.GetString() ?? string.Empty;
+            return text;
         }
 
         /// <summary>
@@ -73,6 +74,24 @@ namespace Backend.Common
             if (value.ValueKind != JsonValueKind.Number || !value.TryGetDouble(out var number) || !double.IsFinite(number))
             {
                 _errors.Add(new FieldError(field, "Value must be a number."));
+                return 0;
+            }
+            return number;
+        }
+
+        /// <summary>
+        /// Reads a required integer number. On a problem an error is recorded and 0 is returned.
+        /// </summary>
+        public int GetRequiredInteger(string field)
+        {
+            if (!_body.TryGetProperty(field, out var value))
+            {
+                _errors.Add(new FieldError(field, "Field is required."));
+                return 0;
+            }
+            if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var number))
+            {
+                _errors.Add(new FieldError(field, "Value must be an integer."));
                 return 0;
             }
             return number;
