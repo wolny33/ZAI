@@ -1,15 +1,6 @@
-# Manual API tests.
-# Set @host to the address printed by the running application and @password to your administrator password.
-
-@host = http://localhost:5091
-@admin = admin
-@password = PUT_ADMIN_PASSWORD_HERE
-
-### Health: 200 {"status":"ok"}
-GET {{host}}/api/health
-
-### Unknown address: 404 (Problem Details)
-GET {{host}}/api/does-not-exist
+# Manual tests of the administrator account: login, logout and password change.
+# Pick the environment in the "env" list above the editor.
+# Variables come from http-client.env.json and http-client.env.json.user.
 
 ### Login with an empty object: 400, both fields listed
 POST {{host}}/api/auth/login

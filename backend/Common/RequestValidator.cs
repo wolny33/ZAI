@@ -22,7 +22,7 @@ namespace Backend.Common
         /// <summary>
         /// Reads a required text field. Records an error and returns null if it is missing or not a string.
         /// </summary>
-        public string GetRequiredString(string field, int minLength = 0)
+        public string GetRequiredString(string field, int minLength = 0, int maxLength = int.MaxValue)
         {
             if (!_body.TryGetProperty(field, out var value))
             {
@@ -36,13 +36,52 @@ namespace Backend.Common
             }
 
             var text = value.GetString() ?? string.Empty;
-            if (text.Length < minLength)
-            {
-                _ruleErrors.Add(new FieldError(field, $"Value must be at least {minLength} characters long."));
-            }
-
+            CheckLength(field, text, minLength, maxLength);
             return value.GetString() ?? string.Empty;
         }
+
+        /// <summary>
+        /// Reads an optional text field: null if it is missing or null.
+        /// </summary>
+        public string? GetOptionalString(string field, int maxLength = int.MaxValue)
+        {
+            if (!_body.TryGetProperty(field, out var value) || value.ValueKind == JsonValueKind.Null)
+            {
+                return null;
+            }
+            if (value.ValueKind != JsonValueKind.String)
+            {
+                _errors.Add(new FieldError(field, "Value must be a string or null."));
+                return null;
+            }
+
+            var text = value.GetString() ?? string.Empty;
+            CheckLength(field, text, 0, maxLength);
+            return text;
+        }
+
+        /// <summary>
+        /// Reads a required number. On a problem an error is recorded and 0 is returned.
+        /// </summary>
+        public double GetRequiredNumber(string field)
+        {
+            if (!_body.TryGetProperty(field, out var value))
+            {
+                _errors.Add(new FieldError(field, "Field is required."));
+                return 0;
+            }
+            if (value.ValueKind != JsonValueKind.Number || !value.TryGetDouble(out var number) || !double.IsFinite(number))
+            {
+                _errors.Add(new FieldError(field, "Value must be a number."));
+                return 0;
+            }
+            return number;
+        }
+
+        /// <summary>
+        /// Records a broken rule that the other methods cannot check (answered with 422).
+        /// </summary>
+        public void AddRuleError(string field, string message) => _ruleErrors.Add(new FieldError(field, message));
 
         /// <summary>
         /// Throws a 400 ApiException listing all recorded errors.
@@ -58,6 +97,18 @@ namespace Backend.Common
                 throw new ApiException(422, "Unprocessable Content", "The request body breaks validation rules.", _ruleErrors);
             }
 
+        }
+
+        private void CheckLength(string field, string text, int minLength, int maxLength)
+        {
+            if (text.Length < minLength)
+            {
+                _ruleErrors.Add(new FieldError(field, $"Value must be at least {minLength} characters long."));
+            }
+            if (text.Length > maxLength)
+            {
+                _ruleErrors.Add(new FieldError(field, $"Value must be at most {maxLength} characters long."));
+            }
         }
     }
 

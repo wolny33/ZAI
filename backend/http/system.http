@@ -1,0 +1,13 @@
+# Manual tests of general behaviour: health, unknown addresses and content negotiation.
+# Pick the environment in the "env" list above the editor.
+# host comes from http-client.env.json.
+
+### Health: 200 {"status":"ok"}
+GET {{host}}/api/health
+
+### Unknown address: 404 (Problem Details)
+GET {{host}}/api/does-not-exist
+
+### List series with an Accept header that cannot be satisfied: 406
+GET {{host}}/api/series
+Accept: application/xml

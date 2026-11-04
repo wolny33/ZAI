@@ -43,11 +43,22 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async ctx =>
     await response.ExecuteAsync(ctx);
 }));
 
+// Respond with 406 when the client does not accept JSON
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.StartsWithSegments("/api") && !ContentNegotiation.AcceptsJson(ctx.Request))
+    {
+        throw new ApiException(406, "Not Acceptable", "Only application/json is available.");
+    }
+    await next();
+});
+
 
 // GET /api/health - check that the app is alive
 app.MapGet("/api/health", () => Results.Json(new { status = "ok" }));
 
 AuthEndpoints.Map(app);
+SeriesEndpoints.Map(app);
 
 // Unknown /api/* addresses return 404 in RFC 9457 format
 app.MapMethods("/api/{**rest}", ["GET", "POST", "PUT", "PATCH", "DELETE"],

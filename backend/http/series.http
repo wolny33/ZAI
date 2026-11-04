@@ -1,0 +1,108 @@
+# Manual tests of series.
+# Pick the environment in the "env" list above the editor.
+# Variables come from http-client.env.json and http-client.env.json.user.
+
+### Login for the series tests: 200
+# @name seriesLogin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{admin}}", "password": "{{password}}" }
+
+###
+@seriesToken = {{seriesLogin.response.body.$.accessToken}}
+
+### List series (public): 200, an array
+GET {{host}}/api/series
+
+### Create a series without a token: 401
+POST {{host}}/api/series
+Content-Type: application/json
+
+{ "name": "Temperature", "minValue": -30, "maxValue": 50, "color": "#d62728", "unit": "°C" }
+
+### Create a series with an empty object: 400, four fields listed
+POST {{host}}/api/series
+Authorization: Bearer {{seriesToken}}
+Content-Type: application/json
+
+{}
+
+### Create a series with wrong types: 400
+POST {{host}}/api/series
+Authorization: Bearer {{seriesToken}}
+Content-Type: application/json
+
+{ "name": 1, "minValue": "low", "maxValue": true, "color": 5, "unit": 7 }
+
+### Create a series with minValue equal to maxValue and a wrong color: 422, two fields listed
+POST {{host}}/api/series
+Authorization: Bearer {{seriesToken}}
+Content-Type: application/json
+
+{ "name": "Broken", "minValue": 10, "maxValue": 10, "color": "red" }
+
+### Create a series with an empty name: 422
+POST {{host}}/api/series
+Authorization: Bearer {{seriesToken}}
+Content-Type: application/json
+
+{ "name": "", "minValue": 0, "maxValue": 1, "color": "#000000" }
+
+### Create a series: 201 with a Location header
+# @name createSeries
+POST {{host}}/api/series
+Authorization: Bearer {{seriesToken}}
+Content-Type: application/json
+
+{ "name": "Temperature", "minValue": -30, "maxValue": 50, "color": "#d62728", "unit": "°C" }
+
+###
+@seriesId = {{createSeries.response.body.$.id}}
+
+### Read the created series: 200
+GET {{host}}/api/series/{{seriesId}}
+
+### Read a series that does not exist: 404
+GET {{host}}/api/series/999999999
+
+### Read a series with a text instead of a number as the id: 404 (no such address)
+GET {{host}}/api/series/abc
+
+### Update the series without a token: 401
+PUT {{host}}/api/series/{{seriesId}}
+Content-Type: application/json
+
+{ "name": "Temperature", "minValue": -40, "maxValue": 60, "color": "#1f77b4" }
+
+### Update the series with invalid data: 422
+PUT {{host}}/api/series/{{seriesId}}
+Authorization: Bearer {{seriesToken}}
+Content-Type: application/json
+
+{ "name": "Temperature", "minValue": 60, "maxValue": -40, "color": "#1f77b4" }
+
+### Update a series that does not exist: 404
+PUT {{host}}/api/series/999999999
+Authorization: Bearer {{seriesToken}}
+Content-Type: application/json
+
+{ "name": "Temperature", "minValue": -40, "maxValue": 60, "color": "#1f77b4" }
+
+### Update the series: 200 with the new values
+PUT {{host}}/api/series/{{seriesId}}
+Authorization: Bearer {{seriesToken}}
+Content-Type: application/json
+
+{ "name": "Temperature outside", "minValue": -40, "maxValue": 60, "color": "#1f77b4", "icon": "circle", "unit": "°C" }
+
+### Delete the series without a token: 401
+DELETE {{host}}/api/series/{{seriesId}}
+
+### Delete the series: 204
+DELETE {{host}}/api/series/{{seriesId}}
+Authorization: Bearer {{seriesToken}}
+
+### Delete the same series again: 404
+DELETE {{host}}/api/series/{{seriesId}}
+Authorization: Bearer {{seriesToken}}
