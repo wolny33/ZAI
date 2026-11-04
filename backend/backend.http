@@ -75,3 +75,71 @@ Authorization: Bearer {{token}}
 ### Logout again with the same token: 401 (the session no longer exists)
 POST {{host}}/api/auth/logout
 Authorization: Bearer {{token}}
+
+
+### ---- Password change tests: ----
+
+### Login for the password tests: 200
+# @name passwordLogin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{admin}}", "password": "{{password}}" }
+
+###
+@passwordToken = {{passwordLogin.response.body.$.accessToken}}
+
+### Change the password without a token: 401
+PUT {{host}}/api/auth/password
+Content-Type: application/json
+
+{ "currentPassword": "x", "newPassword": "long-enough-password" }
+
+### Change the password with an empty object: 400, both fields listed
+PUT {{host}}/api/auth/password
+Authorization: Bearer {{passwordToken}}
+Content-Type: application/json
+
+{}
+
+### Change the password with a too short new password: 422
+PUT {{host}}/api/auth/password
+Authorization: Bearer {{passwordToken}}
+Content-Type: application/json
+
+{ "currentPassword": "{{password}}", "newPassword": "short" }
+
+### Change the password with a wrong current password: 403
+PUT {{host}}/api/auth/password
+Authorization: Bearer {{passwordToken}}
+Content-Type: application/json
+
+{ "currentPassword": "wrong-password", "newPassword": "long-enough-password" }
+
+### Second login, a separate session: 200
+# @name otherLogin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{admin}}", "password": "{{password}}" }
+
+###
+@otherToken = {{otherLogin.response.body.$.accessToken}}
+
+### Change the password to a temporary one: 204 (the session of this token stays valid)
+PUT {{host}}/api/auth/password
+Authorization: Bearer {{passwordToken}}
+Content-Type: application/json
+
+{ "currentPassword": "{{password}}", "newPassword": "temporary-password-1" }
+
+### The other session was removed by the password change: 401
+POST {{host}}/api/auth/logout
+Authorization: Bearer {{otherToken}}
+
+### Restore the original password with the same token: 204
+PUT {{host}}/api/auth/password
+Authorization: Bearer {{passwordToken}}
+Content-Type: application/json
+
+{ "currentPassword": "temporary-password-1", "newPassword": "{{password}}" }
