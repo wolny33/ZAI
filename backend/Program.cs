@@ -60,6 +60,7 @@ app.MapGet("/api/health", () => Results.Json(new { status = "ok" }));
 AuthEndpoints.Map(app);
 SeriesEndpoints.Map(app);
 SensorEndpoints.Map(app);
+MeasurementEndpoints.Map(app);
 
 // Unknown /api/* addresses return 404 in RFC 9457 format
 app.MapMethods("/api/{**rest}", ["GET", "POST", "PUT", "PATCH", "DELETE"],

@@ -1,0 +1,241 @@
+# Manual tests of measurements.
+# Pick the environment in the "env" list above the editor.
+# Variables come from http-client.env.json and http-client.env.json.user.
+# In query strings write the time zone as Z (or encode + as %2B).
+
+### Login for the measurement tests: 200
+# @name measurementsLogin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "{{admin}}", "password": "{{password}}" }
+
+###
+@measurementsToken = {{measurementsLogin.response.body.$.accessToken}}
+
+### Create a series with the range 0 to 100: 201
+# @name measurementSeries
+POST {{host}}/api/series
+Authorization: Bearer {{measurementsToken}}
+Content-Type: application/json
+
+{ "name": "Measurement tests", "minValue": 0, "maxValue": 100, "color": "#9467bd" }
+
+###
+@measurementSeriesId = {{measurementSeries.response.body.$.id}}
+
+### Register a sensor: 201, the apiKey is used by the requests below
+# @name measurementSensor
+POST {{host}}/api/sensors
+Authorization: Bearer {{measurementsToken}}
+Content-Type: application/json
+
+{ "name": "Measurement sensor", "seriesId": {{measurementSeriesId}} }
+
+###
+@sensorKey = {{measurementSensor.response.body.$.apiKey}}
+@sensorId = {{measurementSensor.response.body.$.id}}
+
+### Send a measurement without a key: 401
+POST {{host}}/api/measurements
+Content-Type: application/json
+
+{ "value": 20 }
+
+### Send a measurement with a wrong key: 401
+POST {{host}}/api/measurements
+X-API-Key: this-key-does-not-exist-0123456789abcdef
+Content-Type: application/json
+
+{ "value": 20 }
+
+### Send a measurement with only the administrator token: 401
+POST {{host}}/api/measurements
+Authorization: Bearer {{measurementsToken}}
+Content-Type: application/json
+
+{ "value": 20 }
+
+### Send a measurement with a plain text body: 415
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: text/plain
+
+value=20
+
+### Send an empty object: 400, value listed
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: application/json
+
+{}
+
+### Send wrong types: 400, two fields listed
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: application/json
+
+{ "value": "abc", "timestamp": 12345 }
+
+### Send a timestamp that is not a date: 400
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: application/json
+
+{ "value": 20, "timestamp": "yesterday" }
+
+### Send a value above the range: 422, value listed
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: application/json
+
+{ "value": 101, "timestamp": "2026-01-10T10:00:00Z" }
+
+### Send a value below the range: 422
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: application/json
+
+{ "value": -0.5, "timestamp": "2026-01-10T10:00:00Z" }
+
+### Send a timestamp far in the future: 422, timestamp listed
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: application/json
+
+{ "value": 20, "timestamp": "2099-01-01T00:00:00Z" }
+
+### Send a measurement: 201 with a Location header, sensorId and seriesId filled in
+# @name firstMeasurement
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: application/json
+
+{ "value": 21.5, "timestamp": "2026-01-10T11:00:00Z" }
+
+###
+@measurementId = {{firstMeasurement.response.body.$.id}}
+
+### Send a measurement with a time zone offset: 201, the returned timestamp is the same moment in UTC
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: application/json
+
+{ "value": 10, "timestamp": "2026-01-10T13:00:00+01:00" }
+
+### Send the lowest allowed value: 201
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: application/json
+
+{ "value": 0, "timestamp": "2026-01-10T09:00:00Z" }
+
+### Send the highest allowed value: 201
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: application/json
+
+{ "value": 100, "timestamp": "2026-01-10T09:30:00Z" }
+
+### Send an older measurement after newer ones: 201
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: application/json
+
+{ "value": 30, "timestamp": "2026-01-10T10:00:00Z" }
+
+### Send a measurement without a timestamp: 201, the timestamp is the current time
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: application/json
+
+{ "value": 5 }
+
+### Get the measurement by its id: 200
+GET {{host}}/api/measurements/{{measurementId}}
+
+### Get a measurement that does not exist: 404
+GET {{host}}/api/measurements/999999999
+
+### Change a measurement (PUT): 404, measurements cannot be changed
+PUT {{host}}/api/measurements/{{measurementId}}
+Authorization: Bearer {{measurementsToken}}
+Content-Type: application/json
+
+{ "value": 50 }
+
+### Change a measurement (PATCH): 404, measurements cannot be changed
+PATCH {{host}}/api/measurements/{{measurementId}}
+Authorization: Bearer {{measurementsToken}}
+Content-Type: application/json
+
+{ "value": 50 }
+
+### Delete a measurement: 404, measurements cannot be deleted
+DELETE {{host}}/api/measurements/{{measurementId}}
+Authorization: Bearer {{measurementsToken}}
+
+### List the series (public): 200, six measurements from the oldest (09:00) to the newest (now)
+GET {{host}}/api/measurements?series={{measurementSeriesId}}
+
+### List newest first: 200, the same six measurements in reverse order
+GET {{host}}/api/measurements?series={{measurementSeriesId}}&sort=-timestamp
+
+### List only the newest measurement: 200, one measurement
+GET {{host}}/api/measurements?series={{measurementSeriesId}}&sort=-timestamp&limit=1
+
+### List from 10:00 to 11:00 (both ends included): 200, two measurements (10:00 and 11:00)
+GET {{host}}/api/measurements?series={{measurementSeriesId}}&from=2026-01-10T10:00:00Z&to=2026-01-10T11:00:00Z
+
+### List from 11:00 on: 200, three measurements (11:00, 12:00 and the one from now)
+GET {{host}}/api/measurements?series={{measurementSeriesId}}&from=2026-01-10T11:00:00Z
+
+### List two series at once: 200, all six measurements of our series (series 999999999 does not exist and adds nothing)
+GET {{host}}/api/measurements?series={{measurementSeriesId}},999999999
+
+### List a series that does not exist: 200, an empty array
+GET {{host}}/api/measurements?series=999999999
+
+### List with a wrong date: 400, from listed
+GET {{host}}/api/measurements?from=not-a-date
+
+### List with every parameter wrong: 400, four fields listed
+GET {{host}}/api/measurements?series=a,b&from=x&sort=value&limit=0
+
+### List with a limit above the maximum: 400
+GET {{host}}/api/measurements?limit=10001
+
+### Narrow the range so that it excludes stored measurements: 409
+PUT {{host}}/api/series/{{measurementSeriesId}}
+Authorization: Bearer {{measurementsToken}}
+Content-Type: application/json
+
+{ "name": "Measurement tests", "minValue": 50, "maxValue": 60, "color": "#9467bd" }
+
+### Widen the range: 200
+PUT {{host}}/api/series/{{measurementSeriesId}}
+Authorization: Bearer {{measurementsToken}}
+Content-Type: application/json
+
+{ "name": "Measurement tests", "minValue": -10, "maxValue": 200, "color": "#9467bd" }
+
+### Unregister the sensor: 204
+DELETE {{host}}/api/sensors/{{sensorId}}
+Authorization: Bearer {{measurementsToken}}
+
+### Send a measurement with the key of the unregistered sensor: 401
+POST {{host}}/api/measurements
+X-API-Key: {{sensorKey}}
+Content-Type: application/json
+
+{ "value": 20 }
+
+### Get the old measurement: 200, its sensorId is now null
+GET {{host}}/api/measurements/{{measurementId}}
+
+### Delete the series: 204 (its measurements disappear with it)
+DELETE {{host}}/api/series/{{measurementSeriesId}}
+Authorization: Bearer {{measurementsToken}}
+
+### Get the measurement of the deleted series: 404
+GET {{host}}/api/measurements/{{measurementId}}

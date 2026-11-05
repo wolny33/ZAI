@@ -98,6 +98,24 @@ namespace Backend.Common
         }
 
         /// <summary>
+        /// Reads an optional date-time: null if it is missing or null.
+        /// </summary>
+        public DateTimeOffset? GetOptionalTimestamp(string field)
+        {
+            if (!_body.TryGetProperty(field, out var value) || value.ValueKind == JsonValueKind.Null)
+            {
+                return null;
+            }
+            if (value.ValueKind != JsonValueKind.String || 
+                !DateTimeParsing.TryParse(value.GetString() ?? string.Empty, out var timestamp))
+            {
+                _errors.Add(new FieldError(field, "Value must be a date-time, e.g. 2026-10-15T08:30:00Z."));
+                return null;
+            }
+            return timestamp;
+        }
+
+        /// <summary>
         /// Records a broken rule that the other methods cannot check (answered with 422).
         /// </summary>
         public void AddRuleError(string field, string message) => _ruleErrors.Add(new FieldError(field, message));
