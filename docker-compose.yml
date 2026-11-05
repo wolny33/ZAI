@@ -16,5 +16,22 @@ services:
       timeout: 3s
       retries: 20
 
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      # "db" is the name of the database service on the Compose network
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=zai;Username=zai;Password=${POSTGRES_PASSWORD:?}"
+      # Used only when no administrator exists yet
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+
 volumes:
   dbdata:
