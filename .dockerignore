@@ -1,0 +1,12 @@
+# Build output from Visual Studio (the image builds its own)
+**/bin/
+**/obj/
+
+# Editor, Git and CI files are not needed in the image
+.vs/
+.git/
+.github/
+
+# Secrets must never end up in an image
+.env
+**/*.user
