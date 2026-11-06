@@ -75,8 +75,9 @@ namespace Backend.Endpoints
         }
 
         // POST /api/measurements (sensor key in the X-API-Key header)
-        private static async Task<IResult> CreateMeasurement(HttpContext ctx, NpgsqlDataSource ds)
+        private static async Task<IResult> CreateMeasurement(HttpContext ctx, NpgsqlDataSource ds, ILoggerFactory loggers)
         {
+            var log = loggers.CreateLogger("Measurements");
             var sensor = await SensorAuth.Require(ctx, ds);
 
             var body = await HttpHelpers.ReadJsonObject(ctx);
@@ -85,6 +86,9 @@ namespace Backend.Endpoints
             var timestamp = validator.GetOptionalTimestamp("timestamp");
             if (timestamp != null && timestamp > DateTimeOffset.UtcNow.AddMinutes(MaxMinutesInFuture))
             {
+                log.LogWarning(
+                    "Rejected timestamp {Timestamp} from sensor {SensorId}: more than {Minutes} minutes in the future.",
+                    timestamp, sensor.SensorId, MaxMinutesInFuture);
                 validator.AddRuleError("timestamp", 
                     $"Value must not be more than {MaxMinutesInFuture} minutes in the future.");
             }
@@ -116,6 +120,9 @@ namespace Backend.Endpoints
 
             if (value < minValue || value > maxValue)
             {
+                log.LogWarning(
+                    "Rejected value {Value} from sensor {SensorId}: outside [{Min}, {Max}] of series {SeriesId}.",
+                    value, sensor.SensorId, minValue, maxValue, sensor.SeriesId);
                 throw new ApiException(422, "Unprocessable Content", "The request body breaks validation rules.",
                     [new FieldError("value", $"Value must be between {minValue} and {maxValue}.")]);
             }
