@@ -33,5 +33,24 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
 
+  # HTTPS in front of the backend, started only on the server (COMPOSE_PROFILES=production)
+  caddy:
+    image: caddy:2
+    profiles: ["production"]
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
 volumes:
   dbdata:
+  caddy_data:
+  caddy_config:

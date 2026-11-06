@@ -1,0 +1,4 @@
+# HTTPS for the domain from DOMAIN; the certificate is obtained and renewed automatically
+{$DOMAIN} {
+	reverse_proxy backend:8080
+}
