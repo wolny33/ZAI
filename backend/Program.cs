@@ -1,7 +1,6 @@
 using Backend.Common;
 using Backend.Data;
 using Backend.Endpoints;
-using Microsoft.AspNetCore.Diagnostics;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,6 +10,8 @@ var connString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("Missing connection string 'ConnectionStrings:Default'.");
 
 builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(connString));
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
@@ -20,28 +21,8 @@ var dataSource = app.Services.GetRequiredService<NpgsqlDataSource>();
 await Db.ApplySchema(dataSource, AppContext.BaseDirectory, app.Logger);
 await Db.SeedAdmin(dataSource, app.Configuration, app.Logger);
 
-// Turns exceptions into error responses: ApiException keeps the status and details it carries,
-// anything unexpected becomes a generic 500, details go to the log.
-app.UseExceptionHandler(errorApp => errorApp.Run(async ctx =>
-{
-    var exception = ctx.Features.Get<IExceptionHandlerFeature>()?.Error;
-    IResult response;
-    if (exception is ApiException api)
-    {
-        response = HttpHelpers.Problem(ctx, api.Status, api.Title, api.Detail, api.Errors, api.WwwAuthenticate);
-    }
-    else if (exception is BadHttpRequestException bad)
-    {
-        response = HttpHelpers.Problem(ctx, bad.StatusCode, "Bad Request", "The request could not be processed.");
-    }
-    else
-    {
-        var log = ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Unhandled");
-        log.LogError(exception, "Unhandled exception on {Method} {Path}", ctx.Request.Method, ctx.Request.Path);
-        response = HttpHelpers.Problem(ctx, 500, "Internal Server Error", "An unexpected error occurred.");
-    }
-    await response.ExecuteAsync(ctx);
-}));
+// Turns exceptions into error responses with ApiExceptionHandler
+app.UseExceptionHandler();
 
 // Respond with 406 when the client does not accept JSON
 app.Use(async (ctx, next) =>
