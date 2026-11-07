@@ -13,7 +13,7 @@ from pathlib import Path
 
 import requests
 
-from sensor import describe_problem
+from sensor import describe_problem, parse_interval
 
 SENSOR_SCRIPT = Path(__file__).with_name("sensor.py")
 
@@ -58,7 +58,15 @@ def parse_args():
     parser.add_argument("--user", default="admin", help="administrator login (default: admin)")
     parser.add_argument("--count", type=int, default=20, help="measurements per series (default: 20)")
     parser.add_argument("--interval", default="1h", help="time between measurements (default: 1h)")
-    return parser.parse_args()
+    args = parser.parse_args()
+    
+    if args.count < 1:
+        parser.error("--count must be positive")
+    try:
+        parse_interval(args.interval)
+    except argparse.ArgumentTypeError as error:
+        parser.error(f"--interval: {error}")
+    return args
 
 
 def main():

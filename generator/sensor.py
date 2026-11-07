@@ -31,8 +31,8 @@ def parse_interval(text):
 
 def random_walk(low, high):
     """Generates random values that change smoothly and stay within [low, high]."""
-    value = random.uniform(low, high)
     step = (high - low) * 0.1
+    value = random.uniform(low + step, high - step)
     while True:
         value = min(high, max(low, value + random.uniform(-step, step)))
         yield round(value, 2)

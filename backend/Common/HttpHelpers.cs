@@ -17,7 +17,7 @@ namespace Backend.Common
         public static IResult Problem(HttpContext ctx, int status, string title, string? detail = null,
                                       IEnumerable<FieldError>? errors = null, string? wwwAuthenticate = null)
         {
-            if (wwwAuthenticate is not null)
+            if (wwwAuthenticate != null)
             {
                 ctx.Response.Headers.WWWAuthenticate = wwwAuthenticate;
             }

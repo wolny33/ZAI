@@ -133,14 +133,15 @@ namespace Backend.Common
             {
                 throw new ApiException(422, "Unprocessable Content", "The request body breaks validation rules.", _ruleErrors);
             }
-
         }
 
         private void CheckLength(string field, string text, int minLength, int maxLength)
         {
             if (text.Length < minLength)
             {
-                _ruleErrors.Add(new FieldError(field, $"Value must be at least {minLength} characters long."));
+                var message = minLength == 1 ? "Value must not be empty." : 
+                    $"Value must be at least {minLength} characters long.";
+                _ruleErrors.Add(new FieldError(field, message));
             }
             if (text.Length > maxLength)
             {

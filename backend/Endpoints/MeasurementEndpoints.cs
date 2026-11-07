@@ -24,7 +24,7 @@ namespace Backend.Endpoints
             app.MapPost("/api/measurements", CreateMeasurement);
         }
 
-        // GET /api/measurements?series=1,2&from=...&to=...&sort=-timestamp&limit=100
+        // GET /api/measurements
         private static async Task<IResult> GetMeasurements(HttpContext ctx, NpgsqlDataSource ds)
         {
             var query = ReadMeasurementQuery(ctx.Request.Query);
