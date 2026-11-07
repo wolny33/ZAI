@@ -1,3 +1,4 @@
+using Backend.Common;
 using Npgsql;
 
 namespace Backend.Data
@@ -37,7 +38,7 @@ namespace Backend.Data
                 return;
             }
 
-            var hash = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 12);
+            var hash = Passwords.Hash(password);
             await using var insert = ds.CreateCommand(
                 "INSERT INTO admin_users (username, password_hash) VALUES (@username, @password_hash) ON CONFLICT (username) DO NOTHING");
             insert.Parameters.AddWithValue("username", username);

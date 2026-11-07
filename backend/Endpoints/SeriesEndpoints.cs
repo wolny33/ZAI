@@ -1,6 +1,5 @@
 ﻿using Backend.Common;
 using Npgsql;
-using static Npgsql.Replication.PgOutput.Messages.RelationMessage;
 
 namespace Backend.Endpoints
 {

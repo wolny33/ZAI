@@ -6,11 +6,6 @@ namespace Backend.Endpoints
     public static class AuthEndpoints
     {
         private const int TokenLifetimeSeconds = 8 * 60 * 60;
-        private const int BcryptWorkFactor = 12;
-
-        // Checked when the username does not exist, so that an unknown user takes as long
-        // to reject as a known one (the response time must not reveal which usernames exist).
-        private static readonly string DummyHash = BCrypt.Net.BCrypt.HashPassword("dummy-password", workFactor: BcryptWorkFactor);
 
         public static void Map(WebApplication app)
         {
@@ -42,9 +37,7 @@ namespace Backend.Endpoints
                 }
             }
 
-            // bcrypt always runs (against DummyHash for an unknown user)
-            var passwordOk = BCrypt.Net.BCrypt.Verify(password, hash ?? DummyHash);
-            if (adminId == null || !passwordOk)
+            if (!Passwords.Verify(password, hash) || adminId == null)
             {
                 log.LogWarning("Failed login attempt for user '{Username}'.", username);
                 throw new ApiException(401, "Unauthorized", "Invalid username or password.", wwwAuthenticate: "Bearer");
@@ -99,7 +92,7 @@ namespace Backend.Endpoints
             {
                 find.Parameters.AddWithValue("admin_id", session.AdminId);
                 var hash = (string?)await find.ExecuteScalarAsync();
-                if (hash == null || !BCrypt.Net.BCrypt.Verify(currentPassword, hash))
+                if (!Passwords.Verify(currentPassword, hash))
                 {
                     log.LogWarning("Password change rejected for administrator {AdminId}: wrong current password.", session.AdminId);
                     throw new ApiException(403, "Forbidden", "The current password is incorrect.");
@@ -117,7 +110,7 @@ namespace Backend.Endpoints
 
             await using (var update = ds.CreateCommand("UPDATE admin_users SET password_hash = @password_hash WHERE id = @admin_id"))
             {
-                update.Parameters.AddWithValue("password_hash", BCrypt.Net.BCrypt.HashPassword(newPassword, workFactor: BcryptWorkFactor));
+                update.Parameters.AddWithValue("password_hash", Passwords.Hash(newPassword));
                 update.Parameters.AddWithValue("admin_id", session.AdminId);
                 await update.ExecuteNonQueryAsync();
             }
