@@ -99,24 +99,7 @@ namespace Backend.Endpoints
             await using var connection = await ds.OpenConnectionAsync();
             await using var transaction = await connection.BeginTransactionAsync();
 
-            // FOR SHARE keeps the range of the series unchanged until the commit
-            // (PUT /api/series locks the row FOR UPDATE)
-            double minValue;
-            double maxValue;
-            await using (var lockRow = new NpgsqlCommand(
-                "SELECT min_value, max_value FROM series WHERE id = @id FOR SHARE", connection, transaction))
-            {
-                lockRow.Parameters.AddWithValue("id", sensor.SeriesId);
-                await using var reader = await lockRow.ExecuteReaderAsync();
-                if (!await reader.ReadAsync())
-                {
-                    // The series was deleted (together with its sensors) after the key was checked
-                    throw SensorAuth.InvalidKey();
-                }
-                minValue = reader.GetDouble(0);
-                maxValue = reader.GetDouble(1);
-            }
-
+            var (minValue, maxValue) = await LockSeriesRange(connection, transaction, sensor.SeriesId);
             if (value < minValue || value > maxValue)
             {
                 log.LogWarning(
@@ -150,6 +133,21 @@ namespace Backend.Endpoints
             return Results.Created("/api/measurements/" + measurement.Id, measurement);
         }
 
+
+        private static async Task<(double Min, double Max)> LockSeriesRange(
+            NpgsqlConnection connection, NpgsqlTransaction transaction, int seriesId)
+        {
+            await using var lockRow = new NpgsqlCommand(
+                "SELECT min_value, max_value FROM series WHERE id = @id FOR SHARE", connection, transaction);
+            lockRow.Parameters.AddWithValue("id", seriesId);
+            await using var reader = await lockRow.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+            {
+                // The series was deleted (together with its sensors) after the key was checked
+                throw SensorAuth.InvalidKey();
+            }
+            return (reader.GetDouble(0), reader.GetDouble(1));
+        }
 
         /// <summary>
         /// Reads and checks the query string of GET /api/measurements, every wrong parameter is listed.
