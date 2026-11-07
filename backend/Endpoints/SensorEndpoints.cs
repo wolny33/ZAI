@@ -10,9 +10,17 @@ namespace Backend.Endpoints
             "(SELECT max(m.ts) FROM measurements m WHERE m.sensor_id = s.id) FROM sensors s";
 
         private record SensorDto(int Id, string Name, int SeriesId, DateTimeOffset CreatedAt, DateTimeOffset? LastMeasurementAt);
-        private record SensorCreatedDto(int Id, string Name, int SeriesId, DateTimeOffset CreatedAt, DateTimeOffset? LastMeasurementAt, string ApiKey)
-            : SensorDto(Id, Name, SeriesId, CreatedAt, LastMeasurementAt);
 
+        // A newly registered sensor: its data plus the API key, which is shown only once
+        private record SensorCreatedDto : SensorDto
+        {
+            public string ApiKey { get; }
+
+            public SensorCreatedDto(SensorDto sensor, string apiKey) : base(sensor)
+            {
+                ApiKey = apiKey;
+            }
+        }
 
         public static void Map(WebApplication app)
         {
@@ -67,24 +75,23 @@ namespace Backend.Endpoints
             var apiKey = Secrets.NewSecret();
             try
             {
+                // A new sensor has no measurements yet, so the last column is NULL
                 await using var insert = ds.CreateCommand(
                     "INSERT INTO sensors (name, series_id, key_hash) VALUES (@name, @series_id, @key_hash) " +
-                    "RETURNING id, name, series_id, created_at");
+                    "RETURNING id, name, series_id, created_at, NULL");
                 insert.Parameters.AddWithValue("name", name);
                 insert.Parameters.AddWithValue("series_id", seriesId);
                 insert.Parameters.AddWithValue("key_hash", Secrets.Hash(apiKey));
                 await using var reader = await insert.ExecuteReaderAsync();
                 await reader.ReadAsync();
 
-                var sensor = new SensorCreatedDto(reader.GetInt32(0), reader.GetString(1), reader.GetInt32(2), 
-                    reader.GetFieldValue<DateTimeOffset>(3), null, apiKey);
+                var sensor = new SensorCreatedDto(ReadSensor(reader), apiKey);
                 return Results.Created("/api/sensors/" + sensor.Id, sensor);
             }
             catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.ForeignKeyViolation)
             {
-                throw new ApiException(422, "Unprocessable Content", "The request body breaks validation rules.", 
+                throw new ApiException(422, "Unprocessable Content", "The request body breaks validation rules.",
                     [new FieldError("seriesId", $"Series {seriesId} does not exist.")]);
-
             }
         }
 
@@ -107,7 +114,7 @@ namespace Backend.Endpoints
             reader.GetString(1), reader.GetInt32(2), reader.GetFieldValue<DateTimeOffset>(3),
             reader.IsDBNull(4) ? null : reader.GetFieldValue<DateTimeOffset>(4));
 
-        private static ApiException SensorNotFound(int id) => 
+        private static ApiException SensorNotFound(int id) =>
             new ApiException(404, "Not Found", $"Sensor {id} does not exist.");
     }
 }

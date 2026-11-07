@@ -84,38 +84,38 @@ namespace Backend.Endpoints
                 {
                     throw SeriesNotFound(id);
                 }
-
-                // The new range must still contain every stored measurement
-                await using (var check = new NpgsqlCommand(
-                    "SELECT EXISTS (SELECT 1 FROM measurements WHERE series_id = @id AND (value < @min_value OR value > @max_value))",
-                    connection, transaction))
-                {
-                    check.Parameters.AddWithValue("id", id);
-                    check.Parameters.AddWithValue("min_value", input.MinValue);
-                    check.Parameters.AddWithValue("max_value", input.MaxValue);
-                    if ((bool?)await check.ExecuteScalarAsync() == true)
-                    {
-                        throw new ApiException(409, "Conflict",
-                            "The new range [minValue, maxValue] does not contain all measurements already stored in this series.");
-                    }
-                }
-
-                SeriesDto series;
-                await using (var update = new NpgsqlCommand(
-                    "UPDATE series SET name = @name, min_value = @min_value, max_value = @max_value, " +
-                    "color = @color, icon = @icon, unit = @unit WHERE id = @id RETURNING " + Columns,
-                    connection, transaction))
-                {
-                    update.Parameters.AddWithValue("id", id);
-                    AddSeriesParameters(update, input);
-                    await using var reader = await update.ExecuteReaderAsync();
-                    await reader.ReadAsync();
-                    series = ReadSeries(reader);
-                }
-
-                await transaction.CommitAsync();
-                return Results.Json(series);
             }
+
+            // The new range must still contain every stored measurement
+            await using (var check = new NpgsqlCommand(
+                "SELECT EXISTS (SELECT 1 FROM measurements WHERE series_id = @id AND (value < @min_value OR value > @max_value))",
+                connection, transaction))
+            {
+                check.Parameters.AddWithValue("id", id);
+                check.Parameters.AddWithValue("min_value", input.MinValue);
+                check.Parameters.AddWithValue("max_value", input.MaxValue);
+                if ((bool?)await check.ExecuteScalarAsync() == true)
+                {
+                    throw new ApiException(409, "Conflict",
+                        "The new range [minValue, maxValue] does not contain all measurements already stored in this series.");
+                }
+            }
+
+            SeriesDto series;
+            await using (var update = new NpgsqlCommand(
+                "UPDATE series SET name = @name, min_value = @min_value, max_value = @max_value, " +
+                "color = @color, icon = @icon, unit = @unit WHERE id = @id RETURNING " + Columns,
+                connection, transaction))
+            {
+                update.Parameters.AddWithValue("id", id);
+                AddSeriesParameters(update, input);
+                await using var reader = await update.ExecuteReaderAsync();
+                await reader.ReadAsync();
+                series = ReadSeries(reader);
+            }
+
+            await transaction.CommitAsync();
+            return Results.Json(series);
         }
 
         // DELETE /api/series/{id}
