@@ -29,3 +29,46 @@ jobs:
       run: dotnet build --no-restore
     - name: Test
       run: dotnet test --no-build --verbosity normal
+
+  api-tests:
+  # Runs the instructor's tests against the app started with Docker Compose
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Generate passwords for this run
+      run: |
+        admin_password=$(openssl rand -hex 16)
+        echo "::add-mask::$admin_password"
+        echo "ADMIN_PASSWORD=$admin_password" >> "$GITHUB_ENV"
+        echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
+
+    - name: Start the database and the backend
+      run: docker compose up -d --build --wait
+    - name: Wait for the API
+      run: curl --fail --silent --show-error --retry 30 --retry-delay 2 --retry-all-errors http://127.0.0.1:8080/api/health
+
+    - name: Load sample data with the generator
+      run: |
+        pip install -r generator/requirements.txt
+        python generator/seed_sample_data.py --url http://127.0.0.1:8080
+
+    - name: Run the instructor's tests
+      shell: bash
+      run: |
+        node task/zai-tests.mjs --app http://127.0.0.1:8080 --user admin --pass "$ADMIN_PASSWORD" --stage E1 | tee test-output.txt
+        # The script always exits with 0, so a failed test is found in its output
+        if grep -q "✘" test-output.txt; then exit 1; fi
+
+    - name: Show backend logs
+      if: failure()
+      run: docker compose logs backend
