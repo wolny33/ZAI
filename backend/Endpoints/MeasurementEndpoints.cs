@@ -75,9 +75,8 @@ namespace Backend.Endpoints
         }
 
         // POST /api/measurements (sensor key in the X-API-Key header)
-        private static async Task<IResult> CreateMeasurement(HttpContext ctx, NpgsqlDataSource ds, ILoggerFactory loggers)
+        private static async Task<IResult> CreateMeasurement(HttpContext ctx, NpgsqlDataSource ds, ILogger<Program> log)
         {
-            var log = loggers.CreateLogger("Measurements");
             var sensor = await SensorAuth.Require(ctx, ds);
 
             var body = await HttpHelpers.ReadJsonObject(ctx);
