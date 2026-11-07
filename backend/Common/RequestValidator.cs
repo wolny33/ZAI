@@ -25,9 +25,8 @@ namespace Backend.Common
         /// </summary>
         public string GetRequiredString(string field, int minLength = 0, int maxLength = int.MaxValue)
         {
-            if (!_body.TryGetProperty(field, out var value))
+            if (!TryGetRequired(field, out var value))
             {
-                _errors.Add(new FieldError(field, "Field is required."));
                 return string.Empty;
             }
             if (value.ValueKind != JsonValueKind.String)
@@ -46,7 +45,7 @@ namespace Backend.Common
         /// </summary>
         public string? GetOptionalString(string field, int maxLength = int.MaxValue)
         {
-            if (!_body.TryGetProperty(field, out var value) || value.ValueKind == JsonValueKind.Null)
+            if (!TryGetOptional(field, out var value))
             {
                 return null;
             }
@@ -66,9 +65,8 @@ namespace Backend.Common
         /// </summary>
         public double GetRequiredNumber(string field)
         {
-            if (!_body.TryGetProperty(field, out var value))
+            if (!TryGetRequired(field, out var value))
             {
-                _errors.Add(new FieldError(field, "Field is required."));
                 return 0;
             }
             if (value.ValueKind != JsonValueKind.Number || !value.TryGetDouble(out var number) || !double.IsFinite(number))
@@ -84,9 +82,8 @@ namespace Backend.Common
         /// </summary>
         public int GetRequiredInteger(string field)
         {
-            if (!_body.TryGetProperty(field, out var value))
+            if (!TryGetRequired(field, out var value))
             {
-                _errors.Add(new FieldError(field, "Field is required."));
                 return 0;
             }
             if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var number))
@@ -102,7 +99,7 @@ namespace Backend.Common
         /// </summary>
         public DateTimeOffset? GetOptionalTimestamp(string field)
         {
-            if (!_body.TryGetProperty(field, out var value) || value.ValueKind == JsonValueKind.Null)
+            if (!TryGetOptional(field, out var value))
             {
                 return null;
             }
@@ -134,6 +131,22 @@ namespace Backend.Common
                 throw new ApiException(422, "Unprocessable Content", "The request body breaks validation rules.", _ruleErrors);
             }
         }
+
+        // Finds a required field and when it is missing, records an error and returns false.
+        // A field that is null counts as present: the caller then reports a wrong type.
+        private bool TryGetRequired(string field, out JsonElement value)
+        {
+            if (_body.TryGetProperty(field, out value))
+            {
+                return true;
+            }
+            _errors.Add(new FieldError(field, "Field is required."));
+            return false;
+        }
+
+        // Finds an optional field and returns false when it is missing or null.
+        private bool TryGetOptional(string field, out JsonElement value) =>
+            _body.TryGetProperty(field, out value) && value.ValueKind != JsonValueKind.Null;
 
         private void CheckLength(string field, string text, int minLength, int maxLength)
         {
