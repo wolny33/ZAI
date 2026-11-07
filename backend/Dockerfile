@@ -1,7 +1,7 @@
 # Build from the repo root: docker build -f backend/Dockerfile -t zai-backend .
 
 # Build stage
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Restore packages first, so packages are cached between code changes
@@ -13,7 +13,7 @@ COPY db/ db/
 RUN dotnet publish backend/backend.csproj -c Release -o /app --no-restore -p:UseAppHost=false
 
 # Runtime stage
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /app .
 
