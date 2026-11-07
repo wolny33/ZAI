@@ -44,12 +44,12 @@ namespace Backend.Endpoints
             }
 
             // Create a session: the client gets the token, the database keeps only its SHA-256 hash
-            var token = HttpHelpers.NewSecret();
+            var token = Secrets.NewSecret();
             await using (var insert = ds.CreateCommand(
                 "INSERT INTO admin_sessions (token_hash, admin_id, expires_at) " +
                 "VALUES (@token_hash, @admin_id, now() + make_interval(secs => @expires_in))"))
             {
-                insert.Parameters.AddWithValue("token_hash", HttpHelpers.Sha256Hex(token));
+                insert.Parameters.AddWithValue("token_hash", Secrets.Hash(token));
                 insert.Parameters.AddWithValue("admin_id", adminId.Value);
                 insert.Parameters.AddWithValue("expires_in", (double)TokenLifetimeSeconds);
                 await insert.ExecuteNonQueryAsync();

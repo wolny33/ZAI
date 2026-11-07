@@ -1,6 +1,3 @@
-using Microsoft.AspNetCore.WebUtilities;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 namespace Backend.Common
@@ -57,17 +54,5 @@ namespace Backend.Common
                 throw new ApiException(400, "Bad Request", "Request body is not valid JSON.");
             }
         }
-
-        /// <summary>
-        /// SHA-256 of a text as 64 lowercase hex characters (how tokens and API keys are stored).
-        /// </summary>
-        public static string Sha256Hex(string text) =>
-            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
-
-        /// <summary>
-        /// A random secret (access token, API key): 32 random bytes as 43 URL-safe characters.
-        /// </summary>
-        public static string NewSecret() => WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
-
     }
 }

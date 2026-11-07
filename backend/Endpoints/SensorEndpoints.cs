@@ -64,7 +64,7 @@ namespace Backend.Endpoints
             var seriesId = validator.GetRequiredInteger("seriesId");
             validator.ThrowIfInvalid();
 
-            var apiKey = HttpHelpers.NewSecret();
+            var apiKey = Secrets.NewSecret();
             try
             {
                 await using var insert = ds.CreateCommand(
@@ -72,7 +72,7 @@ namespace Backend.Endpoints
                     "RETURNING id, name, series_id, created_at");
                 insert.Parameters.AddWithValue("name", name);
                 insert.Parameters.AddWithValue("series_id", seriesId);
-                insert.Parameters.AddWithValue("key_hash", HttpHelpers.Sha256Hex(apiKey));
+                insert.Parameters.AddWithValue("key_hash", Secrets.Hash(apiKey));
                 await using var reader = await insert.ExecuteReaderAsync();
                 await reader.ReadAsync();
 

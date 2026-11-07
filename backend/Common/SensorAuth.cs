@@ -19,7 +19,7 @@ namespace Backend.Common
 
             // The database keeps only the hash of the key
             await using var find = ds.CreateCommand("SELECT id, series_id FROM sensors WHERE key_hash = @key_hash");
-            find.Parameters.AddWithValue("key_hash", HttpHelpers.Sha256Hex(apiKey));
+            find.Parameters.AddWithValue("key_hash", Secrets.Hash(apiKey));
             await using var reader = await find.ExecuteReaderAsync();
             if (!await reader.ReadAsync())
             {

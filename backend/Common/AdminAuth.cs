@@ -29,7 +29,7 @@ namespace Backend.Common
             }
 
             // The database keeps only the hash of the token
-            var tokenHash = HttpHelpers.Sha256Hex(token);
+            var tokenHash = Secrets.Hash(token);
             await using var find = ds.CreateCommand(
                 "SELECT admin_id FROM admin_sessions WHERE token_hash = @token_hash AND expires_at > now()");
             find.Parameters.AddWithValue("token_hash", tokenHash);
