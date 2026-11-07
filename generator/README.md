@@ -32,6 +32,18 @@ Live – one measurement every 10 seconds until Ctrl+C (the server sets the time
 python generator/sensor.py --url https://example.sslip.io --count 0 --interval 10s --min 18 --max 24
 ```
 
+## Sample data
+
+`seed_sample_data.py` creates three sample series, registers a sensor for each and runs the
+generator with each sensor's key (20 past measurements per series, every hour):
+
+```
+python generator/seed_sample_data.py --url https://example.sslip.io
+```
+
+The administrator password is read from the `ADMIN_PASSWORD` environment variable or asked for.
+Options: `--user` (default `admin`), `--count` (default `20`), `--interval` (default `1h`).
+
 ## Options
 
 | Option | Meaning | Default |
