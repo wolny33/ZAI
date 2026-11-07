@@ -363,4 +363,3 @@ MigrationBackup/
 FodyWeavers.xsd
 
 .env
-zai-tests.mjs
