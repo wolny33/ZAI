@@ -12,6 +12,7 @@ import re
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 import requests
 
@@ -19,10 +20,14 @@ UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600}
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
+IMGW_URL = "https://danepubliczne.imgw.pl/api/data/synop"
 # Open-Meteo keeps hourly data for at most this many past days
 MAX_PAST_DAYS = 92
 # Values measured in weather mode (--variable) and their names in Open-Meteo
-WEATHER_VARIABLES = {"temperature": "temperature_2m", "rain": "rain", "snowfall": "snowfall"}
+WEATHER_VARIABLES = {"temperature": "temperature_2m", "humidity": "relative_humidity_2m",
+                     "rain": "rain", "snowfall": "snowfall"}
+# Values that IMGW stations give and their field names
+IMGW_FIELDS = {"temperature": "temperatura", "humidity": "wilgotnosc_wzgledna"}
 
 
 def parse_interval(text):
@@ -65,26 +70,26 @@ class WeatherError(Exception):
     """Raised when weather data cannot be downloaded."""
 
 
-def fetch_open_meteo(url, params):
-    """Sends a GET request to Open-Meteo and returns the JSON body."""
+def fetch_weather_json(url, params=None):
+    """Sends a GET request to a weather service and returns the JSON body."""
     try:
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         return response.json()
     except (requests.RequestException, ValueError) as error:
-        raise WeatherError(f"Open-Meteo request failed ({type(error).__name__})") from error
+        raise WeatherError(f"{urlparse(url).netloc} request failed ({type(error).__name__})") from error
 
 
 def find_place(name):
     """Finds a place by name and returns its latitude, longitude and full name."""
-    results = fetch_open_meteo(GEOCODING_URL, {"name": name, "count": 1}).get("results")
+    results = fetch_weather_json(GEOCODING_URL, {"name": name, "count": 1}).get("results")
     if not results:
         raise WeatherError(f"place '{name}' was not found")
     place = results[0]
     return place["latitude"], place["longitude"], f"{place['name']}, {place.get('country', '?')}"
 
 
-def weather_source(latitude, longitude, variable, past_start=None):
+def open_meteo_source(latitude, longitude, variable, past_start=None):
     """Returns a function that gives the real weather value for a measurement time.
     In live mode every call downloads the current value. In past mode the hourly values
     are downloaded once and each measurement gets the value of the nearest hour.
@@ -92,12 +97,12 @@ def weather_source(latitude, longitude, variable, past_start=None):
     location = {"latitude": latitude, "longitude": longitude}
     if past_start is None:
         def current_value(_measured_at):
-            return fetch_open_meteo(OPEN_METEO_URL, {**location, "current": variable})["current"][variable]
+            return fetch_weather_json(OPEN_METEO_URL, {**location, "current": variable})["current"][variable]
         return current_value
 
     days = min(MAX_PAST_DAYS, (datetime.now(timezone.utc) - past_start).days + 1)
     # Two forecast days, because the hour nearest to now can already be after midnight
-    hourly = fetch_open_meteo(OPEN_METEO_URL, {**location, "hourly": variable, "past_days": days, "forecast_days": 2})["hourly"]
+    hourly = fetch_weather_json(OPEN_METEO_URL, {**location, "hourly": variable, "past_days": days, "forecast_days": 2})["hourly"]
     # Open-Meteo returns UTC times such as "2026-11-08T10:00"
     by_hour = {datetime.fromisoformat(hour).replace(tzinfo=timezone.utc): value
                for hour, value in zip(hourly["time"], hourly[variable])}
@@ -110,12 +115,54 @@ def weather_source(latitude, longitude, variable, past_start=None):
     return hourly_value
 
 
+def find_imgw_station(name):
+    """Finds an IMGW synoptic station by name (case does not matter).
+    Returns the station id, its full name and the UTC time of its latest reading.
+    """
+    for reading in fetch_weather_json(IMGW_URL):
+        if reading["stacja"].casefold() == name.casefold():
+            # The date and the hour of the reading are separate fields
+            reading_time = datetime.fromisoformat(reading["data_pomiaru"]).replace(
+                hour=int(reading["godzina_pomiaru"]), tzinfo=timezone.utc)
+            return reading["id_stacji"], reading["stacja"], reading_time
+    raise WeatherError(f"IMGW station '{name}' was not found")
+
+
+def imgw_source(station_id, field):
+    """Returns a function that gives the latest reading of an IMGW station (updated every hour)."""
+    def latest_value(_measured_at):
+        # IMGW sends numbers as text, e.g. "1.4"
+        value = fetch_weather_json(f"{IMGW_URL}/id/{station_id}")[field]
+        if value is None:
+            raise WeatherError("the latest IMGW reading has no value")
+        return float(value)
+    return latest_value
+
+
 def make_value_source(args, past_start):
-    """Returns a function that gives the value for a measurement time, depending on --mode."""
+    """Returns a function that gives the value for a measurement time, depending on --mode and --source."""
     if args.mode != "weather":
         values = MODES[args.mode](args.min, args.max)
         return lambda _measured_at: next(values)
+    if args.source == "imgw":
+        return imgw_value_source(args)
+    return open_meteo_value_source(args, past_start)
 
+
+def imgw_value_source(args):
+    """Finds the IMGW station from --place and returns its source of readings."""
+    station_id, station_name, reading_time = find_imgw_station(args.place)
+    print(f"Weather: {args.variable} at IMGW station {station_name} "
+          f"(last reading {reading_time:%Y-%m-%d %H:%M}Z), data from IMGW-PIB")
+    if datetime.now(timezone.utc) - reading_time > timedelta(hours=2):
+        print("Note: the last reading of this station is more than 2 hours old.")
+    if args.interval < timedelta(hours=1):
+        print("Note: IMGW updates readings every hour, so some measurements repeat.")
+    return imgw_source(station_id, IMGW_FIELDS[args.variable])
+
+
+def open_meteo_value_source(args, past_start):
+    """Finds the place for Open-Meteo and returns its source of weather values."""
     if args.latitude is not None:
         latitude, longitude, name = args.latitude, args.longitude, "the given coordinates"
     else:
@@ -125,7 +172,7 @@ def make_value_source(args, past_start):
         print("Note: Open-Meteo has hourly data, so measurements in the same hour get the same value.")
     if not args.past and args.interval < timedelta(minutes=15):
         print("Note: Open-Meteo updates current values every 15 minutes, so some measurements repeat.")
-    return weather_source(latitude, longitude, WEATHER_VARIABLES[args.variable], past_start)
+    return open_meteo_source(latitude, longitude, WEATHER_VARIABLES[args.variable], past_start)
 
 
 def send_measurement(url, key, value, timestamp):
@@ -159,9 +206,14 @@ def parse_args():
                         help="random walk, sine wave or real weather from Open-Meteo (default: random)")
     parser.add_argument("--min", type=float, default=0.0, help="lowest generated value, random and sine modes (default: 0)")
     parser.add_argument("--max", type=float, default=100.0, help="highest generated value, random and sine modes (default: 100)")
+    parser.add_argument("--source", choices=["open-meteo", "imgw"], default="open-meteo",
+                        help="weather mode: Open-Meteo (weather models, any place, past and live) "
+                             "or IMGW (Polish weather stations, live only) (default: open-meteo)")
     parser.add_argument("--variable", choices=sorted(WEATHER_VARIABLES), default="temperature",
-                        help="weather mode: temperature (°C), rain (mm) or snowfall (cm) (default: temperature)")
-    parser.add_argument("--place", default="Zakopane", help="weather mode: place to look up by name (default: Zakopane)")
+                        help="weather mode: temperature (°C), humidity (%%), rain (mm) or snowfall (cm) "
+                             "(default: temperature)")
+    parser.add_argument("--place", default="Zakopane",
+                        help="weather mode: place to look up by name, or the IMGW station name (default: Zakopane)")
     parser.add_argument("--latitude", type=float, help="weather mode: latitude, used with --longitude instead of --place")
     parser.add_argument("--longitude", type=float, help="weather mode: longitude, used with --latitude instead of --place")
     parser.add_argument("--count", type=int, default=20, help="number of measurements; 0 = until Ctrl+C (live mode only) (default: 20)")
@@ -177,6 +229,13 @@ def parse_args():
         parser.error("--latitude and --longitude must be given together")
     if args.mode == "weather" and args.past and args.interval * (args.count - 1) >= timedelta(days=MAX_PAST_DAYS):
         parser.error(f"weather data goes back at most {MAX_PAST_DAYS} days")
+    if args.mode == "weather" and args.source == "imgw":
+        if args.past:
+            parser.error("--source imgw gives only current readings, so it cannot be used with --past")
+        if args.variable not in IMGW_FIELDS:
+            parser.error("--source imgw gives only temperature and humidity")
+        if args.latitude is not None:
+            parser.error("--source imgw chooses the station by name with --place, not by coordinates")
     return args
 
 

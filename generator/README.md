@@ -32,10 +32,17 @@ Live – one measurement every 10 seconds until Ctrl+C (the server sets the time
 python generator/sensor.py --url https://example.sslip.io --count 0 --interval 10s --min 18 --max 24
 ```
 
-## Real weather (Open-Meteo)
+## Real weather
 
-With `--mode weather` the values come from the public weather service
-[Open-Meteo](https://open-meteo.com/) (no account or key needed) instead of being generated.
+With `--mode weather` the values are real weather instead of generated numbers. They come from one
+of two public services, chosen with `--source` (no account or key needed for either):
+
+- `open-meteo` (default) – [Open-Meteo](https://open-meteo.com/): any place, past and live data,
+- `imgw` – [IMGW-PIB](https://danepubliczne.imgw.pl/) (Polish Institute of Meteorology and Water
+  Management): readings of real weather stations, live data only.
+
+### Open-Meteo
+
 The place is looked up by name with the Open-Meteo geocoding API (default: Zakopane), or given
 with `--latitude` and `--longitude`.
 
@@ -47,6 +54,7 @@ python generator/sensor.py --url https://example.sslip.io --mode weather --varia
 | `--variable` | Unit | Value |
 |---|---|---|
 | `temperature` | °C | air temperature 2 m above the ground |
+| `humidity` | % | relative humidity 2 m above the ground |
 | `rain` | mm | rain sum: of the preceding hour in past mode, of the last 15 minutes in live mode |
 | `snowfall` | cm | snowfall sum, like rain |
 
@@ -58,6 +66,24 @@ python generator/sensor.py --url https://example.sslip.io --mode weather --varia
 - The data comes from numerical weather models fed with station observations, calculated for the
   given point and its altitude
 - Real values can fall outside the series range; the server then rejects them with `422`.
+
+### IMGW stations
+
+`--place` is the name of one of the IMGW synoptic stations (letter case does not matter), e.g.
+`Kasprowy Wierch`, `Zakopane`, `Śnieżka`, `Kraków`, `Warszawa`; the full list is at
+<https://danepubliczne.imgw.pl/api/data/synop>. Only `temperature` and `humidity` are available.
+
+```
+python generator/sensor.py --url https://example.sslip.io --mode weather --source imgw --place "Kasprowy Wierch" --variable humidity --count 0 --interval 1h
+```
+
+- Every measurement sends the latest reading of the station; IMGW updates them every hour, so use
+  `--interval 1h` (shorter intervals repeat the same value, the generator prints a note).
+- The generator prints the time of the last reading and a note when it is more than 2 hours old.
+- `--past` and coordinates cannot be used with IMGW.
+
+Source of the data: Institute of Meteorology and Water Management – National Research Institute
+(IMGW-PIB).
 
 ## Sample data
 
@@ -79,9 +105,10 @@ Options: `--user` (default `admin`), `--count` (default `20`), `--interval` (def
 | `--key` | sensor API key (prefer `SENSOR_KEY`) | – |
 | `--mode` | `random` (smooth random walk), `sine` (sine wave with noise, one full cycle every 24 values) or `weather` (real weather from Open-Meteo) | `random` |
 | `--min`, `--max` | range of generated values (`random` and `sine`) | `0`, `100` |
-| `--variable` | `weather` mode: `temperature`, `rain` or `snowfall` | `temperature` |
-| `--place` | `weather` mode: place name to look up | `Zakopane` |
-| `--latitude`, `--longitude` | `weather` mode: coordinates instead of `--place` (both together) | – |
+| `--source` | `weather` mode: `open-meteo` or `imgw` | `open-meteo` |
+| `--variable` | `weather` mode: `temperature`, `humidity`, `rain` or `snowfall` (IMGW: only the first two) | `temperature` |
+| `--place` | `weather` mode: place name to look up, or the IMGW station name | `Zakopane` |
+| `--latitude`, `--longitude` | `weather` mode, Open-Meteo: coordinates instead of `--place` (both together) | – |
 | `--count` | number of measurements; `0` = until Ctrl+C (live mode only) | `20` |
 | `--interval` | time between measurements: `30s`, `10m`, `1h` | `10s` |
 | `--past` | send all measurements at once with timestamps going back from now | off (live mode) |
