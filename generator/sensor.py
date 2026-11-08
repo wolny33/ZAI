@@ -17,6 +17,13 @@ import requests
 
 UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600}
 
+OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
+# Open-Meteo keeps hourly data for at most this many past days
+MAX_PAST_DAYS = 92
+# Values measured in weather mode (--variable) and their names in Open-Meteo
+WEATHER_VARIABLES = {"temperature": "temperature_2m", "rain": "rain", "snowfall": "snowfall"}
+
 
 def parse_interval(text):
     """Parses an interval such as '30s', '10m' or '1h' (no unit means seconds)."""
@@ -50,8 +57,75 @@ def sine_wave(low, high, period=24):
         index += 1
 
 
-# Value sources selected with --mode
+# Generated values selected with --mode (the weather mode is handled separately)
 MODES = {"random": random_walk, "sine": sine_wave}
+
+
+class WeatherError(Exception):
+    """Raised when weather data cannot be downloaded."""
+
+
+def fetch_open_meteo(url, params):
+    """Sends a GET request to Open-Meteo and returns the JSON body."""
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except (requests.RequestException, ValueError) as error:
+        raise WeatherError(f"Open-Meteo request failed ({type(error).__name__})") from error
+
+
+def find_place(name):
+    """Finds a place by name and returns its latitude, longitude and full name."""
+    results = fetch_open_meteo(GEOCODING_URL, {"name": name, "count": 1}).get("results")
+    if not results:
+        raise WeatherError(f"place '{name}' was not found")
+    place = results[0]
+    return place["latitude"], place["longitude"], f"{place['name']}, {place.get('country', '?')}"
+
+
+def weather_source(latitude, longitude, variable, past_start=None):
+    """Returns a function that gives the real weather value for a measurement time.
+    In live mode every call downloads the current value. In past mode the hourly values
+    are downloaded once and each measurement gets the value of the nearest hour.
+    """
+    location = {"latitude": latitude, "longitude": longitude}
+    if past_start is None:
+        def current_value(_measured_at):
+            return fetch_open_meteo(OPEN_METEO_URL, {**location, "current": variable})["current"][variable]
+        return current_value
+
+    days = min(MAX_PAST_DAYS, (datetime.now(timezone.utc) - past_start).days + 1)
+    # Two forecast days, because the hour nearest to now can already be after midnight
+    hourly = fetch_open_meteo(OPEN_METEO_URL, {**location, "hourly": variable, "past_days": days, "forecast_days": 2})["hourly"]
+    # Open-Meteo returns UTC times such as "2026-11-08T10:00"
+    by_hour = {datetime.fromisoformat(hour).replace(tzinfo=timezone.utc): value
+               for hour, value in zip(hourly["time"], hourly[variable])}
+
+    def hourly_value(measured_at):
+        hour = (measured_at + timedelta(minutes=30)).replace(minute=0, second=0, microsecond=0)
+        if by_hour.get(hour) is None:
+            raise WeatherError(f"no weather data for {hour:%Y-%m-%d %H:%M}Z")
+        return by_hour[hour]
+    return hourly_value
+
+
+def make_value_source(args, past_start):
+    """Returns a function that gives the value for a measurement time, depending on --mode."""
+    if args.mode != "weather":
+        values = MODES[args.mode](args.min, args.max)
+        return lambda _measured_at: next(values)
+
+    if args.latitude is not None:
+        latitude, longitude, name = args.latitude, args.longitude, "the given coordinates"
+    else:
+        latitude, longitude, name = find_place(args.place)
+    print(f"Weather: {args.variable} in {name} ({latitude:.2f}, {longitude:.2f}), data from Open-Meteo")
+    if args.past and args.interval < timedelta(hours=1):
+        print("Note: Open-Meteo has hourly data, so measurements in the same hour get the same value.")
+    if not args.past and args.interval < timedelta(minutes=15):
+        print("Note: Open-Meteo updates current values every 15 minutes, so some measurements repeat.")
+    return weather_source(latitude, longitude, WEATHER_VARIABLES[args.variable], past_start)
 
 
 def send_measurement(url, key, value, timestamp):
@@ -81,9 +155,15 @@ def parse_args():
     )
     parser.add_argument("--url", required=True, help="API address, e.g. https://example.sslip.io")
     parser.add_argument("--key", help="sensor API key (prefer the SENSOR_KEY environment variable)")
-    parser.add_argument("--mode", choices=sorted(MODES), default="random", help="how values are generated (default: random)")
-    parser.add_argument("--min", type=float, default=0.0, help="lowest generated value (default: 0)")
-    parser.add_argument("--max", type=float, default=100.0, help="highest generated value (default: 100)")
+    parser.add_argument("--mode", choices=[*sorted(MODES), "weather"], default="random",
+                        help="random walk, sine wave or real weather from Open-Meteo (default: random)")
+    parser.add_argument("--min", type=float, default=0.0, help="lowest generated value, random and sine modes (default: 0)")
+    parser.add_argument("--max", type=float, default=100.0, help="highest generated value, random and sine modes (default: 100)")
+    parser.add_argument("--variable", choices=sorted(WEATHER_VARIABLES), default="temperature",
+                        help="weather mode: temperature (°C), rain (mm) or snowfall (cm) (default: temperature)")
+    parser.add_argument("--place", default="Zakopane", help="weather mode: place to look up by name (default: Zakopane)")
+    parser.add_argument("--latitude", type=float, help="weather mode: latitude, used with --longitude instead of --place")
+    parser.add_argument("--longitude", type=float, help="weather mode: longitude, used with --latitude instead of --place")
     parser.add_argument("--count", type=int, default=20, help="number of measurements; 0 = until Ctrl+C (live mode only) (default: 20)")
     parser.add_argument("--interval", type=parse_interval, default=timedelta(seconds=10), help="time between measurements, e.g. 30s, 10m, 1h (default: 10s)")
     parser.add_argument("--past", action="store_true", help="send all measurements at once with timestamps going back from now")
@@ -93,6 +173,10 @@ def parse_args():
         parser.error("--min must be lower than --max")
     if args.count < 0 or (args.past and args.count == 0):
         parser.error("--count must be positive (0 is allowed only in live mode)")
+    if (args.latitude is None) != (args.longitude is None):
+        parser.error("--latitude and --longitude must be given together")
+    if args.mode == "weather" and args.past and args.interval * (args.count - 1) >= timedelta(days=MAX_PAST_DAYS):
+        parser.error(f"weather data goes back at most {MAX_PAST_DAYS} days")
     return args
 
 
@@ -125,9 +209,13 @@ def main():
         return 2
 
     url = args.url.rstrip("/")
-    values = MODES[args.mode](args.min, args.max)
     total = str(args.count) if args.count > 0 else "-"
     start = datetime.now(timezone.utc) - args.interval * (args.count - 1) if args.past else None
+    try:
+        value_at = make_value_source(args, start)
+    except WeatherError as error:
+        print(f"Weather data unavailable: {error}", file=sys.stderr)
+        return 1
     live_start = datetime.now(timezone.utc)
     counts = {"saved": 0, "rejected": 0, "failed": 0, "unauthorized": 0}
     number = 0
@@ -135,12 +223,17 @@ def main():
     try:
         while args.count == 0 or number < args.count:
             number += 1
-            value = next(values)
             timestamp = start + args.interval * (number - 1) if args.past else None
-            shown_time = (timestamp or datetime.now(timezone.utc)).strftime("%Y-%m-%d %H:%M:%SZ")
-            prefix = f"[{number:>3}/{total}] {shown_time}  value={value:>9.2f}  ->"
+            measured_at = timestamp or datetime.now(timezone.utc)
+            label = f"[{number:>3}/{total}] {measured_at:%Y-%m-%d %H:%M:%SZ}"
 
-            outcome = send_and_report(url, key, value, timestamp, prefix)
+            try:
+                value = value_at(measured_at)
+            except WeatherError as error:
+                print(f"{label}  WEATHER ERROR: {error}")
+                outcome = "failed"
+            else:
+                outcome = send_and_report(url, key, value, timestamp, f"{label}  value={value:>9.2f}  ->")
             counts[outcome] += 1
             if outcome == "unauthorized":
                 break  # stop sending if the API key is invalid
