@@ -68,7 +68,10 @@ jobs:
         node task/zai-tests.mjs --app http://127.0.0.1:8080 --user admin --pass "$ADMIN_PASSWORD" --stage E1 | tee test-output.txt
         # The script always exits with 0, so a failed test is found in its output
         if grep -q "✘" test-output.txt; then exit 1; fi
-
+    - name: Run generator and API tests
+      run: |
+        pip install -r tests/requirements.txt
+        python -m pytest -v
     - name: Show backend logs
       if: failure()
       run: docker compose logs backend

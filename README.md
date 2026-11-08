@@ -31,3 +31,9 @@ The instructor's tests (Node.js 20+):
 ```
 node task/zai-tests.mjs --app http://127.0.0.1:8080 --user admin --pass '<admin password>' --stage E1
 ```
+
+Generator unit tests and API tests (the API tests need a running backend and `ADMIN_PASSWORD`):
+
+```
+python -m pytest -v
+```
