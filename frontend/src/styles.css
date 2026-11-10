@@ -1,0 +1,35 @@
+/* Application layout and print styles (components are styled with Bootstrap) */
+
+body {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #c9d8fb 0%, #dfe8fc 40%, #e9effc 100%);
+}
+
+/* Top bar with the application name */
+.app-header {
+  background-color: #fff;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.08);
+}
+
+.app-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Small logo next to the application name */
+.app-logo {
+  width: 2rem;
+  height: 2rem;
+  color: var(--bs-primary);
+}
+
+/* Colored dot that marks a series */
+.series-swatch {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+}
