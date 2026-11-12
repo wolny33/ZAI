@@ -53,4 +53,20 @@ function fieldErrors(problem) {
   return Object.fromEntries((problem?.errors ?? []).map((error) => [error.field, error.message]))
 }
 
+// The API returns at most this many measurements in one response
+export const MEASUREMENT_LIMIT = 10000
+
+
 export const getSeries = () => request('GET', '/api/series')
+
+/** Gets the measurements of the given series in a time range (from and to are Date objects or null), newest first. */
+export function getMeasurements(seriesIds, from, to) {
+  const query = new URLSearchParams({ series: seriesIds.join(','), sort: '-timestamp', limit: MEASUREMENT_LIMIT })
+  if (from) {
+    query.set('from', from.toISOString())
+  }
+  if (to) {
+    query.set('to', to.toISOString())
+  }
+  return request('GET', `/api/measurements?${query}`)
+}

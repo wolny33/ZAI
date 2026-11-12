@@ -25,11 +25,36 @@ body {
   color: var(--bs-primary);
 }
 
-/* Colored dot that marks a series */
-.series-swatch {
-  display: inline-block;
+/* Main layout: filters on the left, chart and table on the right; one column on small screens */
+.dashboard {
+  display: grid;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (min-width: 992px) {
+  .dashboard {
+    grid-template-columns: 18rem minmax(0, 1fr);
+  }
+}
+ 
+/* The chart fills this box; Chart.js needs a parent with a set height */
+.chart-box {
+  position: relative;
+  height: 20rem;
+}
+ 
+@media (min-width: 992px) {
+  .dashboard {
+    grid-template-columns: 18rem minmax(0, 1fr);
+  }
+}
+ 
+/* Colored mark of a series, in the shape of its points on the chart */
+.series-marker {
   flex-shrink: 0;
-  width: 0.85rem;
-  height: 0.85rem;
-  border-radius: 50%;
+  width: 0.9rem;
+  height: 0.9rem;
+  /* Keeps the mark next to the first line of a long name */
+  margin-top: 0.3em;
 }
