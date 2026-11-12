@@ -2,6 +2,22 @@ import SeriesMarker from './SeriesMarker.jsx'
 import { seriesLabel } from './seriesStyle.js'
 import { PRESETS } from './timeRange.js'
 
+/** A date with an optional time (the time field can be used once a date is chosen). */
+function DateTimeField({ id, label, range, onRangeChange, dateKey, timeKey }) {
+  const change = (key, value) => onRangeChange({ ...range, preset: 'custom', [key]: value })
+  return (
+    <div className="mb-2">
+      <label htmlFor={id} className="form-label small mb-1">{label}</label>
+      <div className="d-flex gap-2">
+        <input id={id} type="date" className="form-control form-control-sm range-date" value={range[dateKey]}
+          onChange={(event) => change(dateKey, event.target.value)} />
+        <input type="time" className="form-control form-control-sm range-time" aria-label={`${label} time (optional)`}
+          value={range[timeKey]} disabled={!range[dateKey]} onChange={(event) => change(timeKey, event.target.value)} />
+      </div>
+    </div>
+  )
+}
+
 /** Filters of the view: time range (a preset or own dates) and the visible series. */
 function SeriesFilter({ series, seriesLoaded, shapes, selectedIds, onSelectedIdsChange, range, onRangeChange }) {
   function toggleSeries(id) {
@@ -22,29 +38,17 @@ function SeriesFilter({ series, seriesLoaded, shapes, selectedIds, onSelectedIds
                 type="button"
                 className={`btn btn-sm ${range.preset === preset.id ? 'btn-primary' : 'btn-outline-primary'}`}
                 aria-pressed={range.preset === preset.id}
-                onClick={() => onRangeChange({ preset: preset.id, from: '', to: '' })}
+                onClick={() => onRangeChange({ preset: preset.id, fromDate: '', fromTime: '', toDate: '', toTime: '' })}
               >
                 {preset.label}
               </button>
             ))}
           </div>
 
-          <label htmlFor="range-from" className="form-label small mb-1">From</label>
-          <input
-            id="range-from"
-            type="datetime-local"
-            className="form-control form-control-sm mb-2"
-            value={range.from}
-            onChange={(event) => onRangeChange({ ...range, preset: 'custom', from: event.target.value })}
-          />
-          <label htmlFor="range-to" className="form-label small mb-1">To</label>
-          <input
-            id="range-to"
-            type="datetime-local"
-            className="form-control form-control-sm"
-            value={range.to}
-            onChange={(event) => onRangeChange({ ...range, preset: 'custom', to: event.target.value })}
-          />
+          <DateTimeField id="range-from" label="From" range={range} onRangeChange={onRangeChange}
+            dateKey="fromDate" timeKey="fromTime" />
+          <DateTimeField id="range-to" label="To" range={range} onRangeChange={onRangeChange}
+            dateKey="toDate" timeKey="toTime" />
         </fieldset>
 
         <fieldset>

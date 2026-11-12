@@ -10,7 +10,7 @@ function App() {
   const [seriesLoaded, setSeriesLoaded] = useState(false)
   const [seriesError, setSeriesError] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
-  const [range, setRange] = useState({ preset: 'all', from: '', to: '' })
+  const [range, setRange] = useState({ preset: 'all', fromDate: '', fromTime: '', toDate: '', toTime: '' })
   // The last answer for the measurements, together with the filters it was asked for
   const [result, setResult] = useState(null)
 

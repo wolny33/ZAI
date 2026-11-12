@@ -12,9 +12,9 @@ export function rangeDates(range) {
   if (preset) {
     return { from: preset.hours ? new Date(Date.now() - preset.hours * 3600 * 1000) : null, to: null }
   }
-  // datetime-local fields give the user's local time, e.g. "2026-11-10T14:30"
-  const from = range.from ? new Date(range.from) : null
-  const to = range.to ? new Date(range.to) : null
+  // Dates and times are local, e.g. "2026-11-10" and "14:30"; without a time the range covers whole days
+  const from = range.fromDate ? new Date(`${range.fromDate}T${range.fromTime || '00:00'}`) : null
+  const to = range.toDate ? new Date(`${range.toDate}T${range.toTime || '23:59'}:59.999`) : null
   if (from && to && from > to) {
     return { error: '"From" must be earlier than "To".' }
   }

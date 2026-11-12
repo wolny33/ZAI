@@ -37,7 +37,17 @@ body {
     grid-template-columns: 18rem minmax(0, 1fr);
   }
 }
- 
+
+/* Date and time side by side in the range filter; the date takes the rest of the width */
+.range-date {
+  min-width: 0;
+}
+
+.range-time {
+  width: 6.5rem;
+  flex-shrink: 0;
+}
+
 /* The chart fills this box; Chart.js needs a parent with a set height */
 .chart-box {
   position: relative;
