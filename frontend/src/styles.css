@@ -116,6 +116,15 @@ body {
   cursor: pointer;
 }
 
+/* Previous and Next at the sides, the row numbers between them */
+.table-pages {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
 /* The chart fills this box; Chart.js needs a parent with a set height */
 .chart-box {
   position: relative;
