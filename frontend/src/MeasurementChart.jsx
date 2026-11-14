@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Chart, Legend, LinearScale, LineController, LineElement, PointElement, TimeScale, Tooltip } from 'chart.js'
+import { drawPoint } from 'chart.js/helpers'
 import 'chartjs-adapter-date-fns'
 import { seriesLabel } from './seriesStyle.js'
 
@@ -38,21 +39,21 @@ function chartData(series, shapes, measurements, allUnits) {
   }))
 
   const scales = {
-      x: {
+    x: {
       type: 'time',
       time: {
         tooltipFormat: 'yyyy-MM-dd HH:mm',
         // 24-hour clock and day before month, e.g. "14:00" and "3 Nov"
         displayFormats: { second: 'HH:mm:ss', minute: 'HH:mm', hour: 'HH:mm', day: 'd MMM', week: 'd MMM' },
       },
-            ticks: {
+      ticks: {
         maxRotation: 0,
         autoSkipPadding: 12,
         // Midnight is a major tick: it shows the date in bold and is kept when labels are skipped
         major: { enabled: true },
         font: (context) => (context.tick?.major ? { weight: 'bold' } : {}),
-      }
-    }
+      },
+    },
   }
   // Only the units of the drawn series get an axis
   const units = allUnits.filter((unit) => withData.some((item) => (item.unit ?? '') === unit))
@@ -69,6 +70,26 @@ function chartData(series, shapes, measurements, allUnits) {
   return { datasets, scales }
 }
 
+/** Finds the points of the given measurements, as the dataset and point indexes that Chart.js uses. */
+function findPoints(chart, ids) {
+  const points = []
+  chart.data.datasets.forEach((dataset, datasetIndex) => {
+    dataset.data.forEach((point, index) => {
+      if (ids.includes(point.id)) {
+        points.push({ datasetIndex, index })
+      }
+    })
+  })
+  return points
+}
+
+/** Shows the values of the given points in the tooltip. */
+function showTooltip(chart, points) {
+  chart.setActiveElements(points)
+  chart.tooltip.setActiveElements(points, { x: 0, y: 0 })
+  chart.update()
+}
+
 /** Line chart of the measurements, one line per series, with time on the x axis. */
 function MeasurementChart({ series, shapes, units, measurements, highlightedIds, onPointClick }) {
   const canvasRef = useRef(null)
@@ -78,12 +99,38 @@ function MeasurementChart({ series, shapes, units, measurements, highlightedIds,
   useEffect(() => {
     onPointClickRef.current = onPointClick
   })
+  // The points of the selected table row, for the plugin that keeps them marked
+  const selectedPointsRef = useRef([])
 
   // Creates the chart once and removes it when the component is gone
   useEffect(() => {
     const chart = new Chart(canvasRef.current, {
       type: 'line',
       data: { datasets: [] },
+      plugins: [{
+        id: 'keepSelection',
+        // The selected points stay enlarged, also while the pointer is over other points
+        afterDatasetsDraw: (chart) => {
+          const { ctx } = chart
+          for (const { datasetIndex, index } of selectedPointsRef.current) {
+            const point = chart.getDatasetMeta(datasetIndex).data[index]
+            if (point && chart.isDatasetVisible(datasetIndex)) {
+              ctx.save()
+              ctx.fillStyle = point.options.backgroundColor
+              ctx.strokeStyle = point.options.borderColor
+              ctx.lineWidth = point.options.borderWidth
+              drawPoint(ctx, { ...point.options, radius: point.options.hoverRadius }, point.x, point.y)
+              ctx.restore()
+            }
+          }
+        },
+        // The tooltip follows the pointer; when it leaves the chart, the selection gets the tooltip back
+        afterEvent: (chart, args) => {
+          if (args.event.type === 'mouseout') {
+            showTooltip(chart, selectedPointsRef.current)
+          }
+        },
+      }],
       options: {
         maintainAspectRatio: false,
         interaction: { mode: 'nearest', intersect: false },
@@ -122,20 +169,10 @@ function MeasurementChart({ series, shapes, units, measurements, highlightedIds,
     chart.update()
   }, [series, shapes, units, measurements])
 
-  // Enlarges the points of the selected table row and shows their values (also after new data)
+  // Marks the points of the selected table row and shows their values (also after new data)
   useEffect(() => {
-    const chart = chartRef.current
-    const active = []
-    chart.data.datasets.forEach((dataset, datasetIndex) => {
-      dataset.data.forEach((point, index) => {
-        if (highlightedIds.includes(point.id)) {
-          active.push({ datasetIndex, index })
-        }
-      })
-    })
-    chart.setActiveElements(active)
-    chart.tooltip.setActiveElements(active, { x: 0, y: 0 })
-    chart.update()
+    selectedPointsRef.current = findPoints(chartRef.current, highlightedIds)
+    showTooltip(chartRef.current, selectedPointsRef.current)
   }, [highlightedIds, series, shapes, units, measurements])
 
   const seriesWithData = new Set(measurements.map((measurement) => measurement.seriesId))
