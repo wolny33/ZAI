@@ -48,6 +48,74 @@ body {
   flex-shrink: 0;
 }
 
+/* Right column of the dashboard: the chart above the table */
+.dashboard-main {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.table-frame {
+  position: relative;
+}
+
+.table-frame::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  z-index: 4;
+  width: 2px;
+  background-color: var(--bs-body-bg);
+  pointer-events: none;
+}
+
+/* The table scrolls in both directions inside this box */
+.table-scroll {
+  max-height: 24rem;
+  overflow: auto;
+}
+
+/* Separate borders move with their sticky cells, collapsed ones would let the content show through */
+.table-scroll table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* The header stays at the top and the time column on the left while scrolling */
+.table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  min-width: 7rem;
+  background-color: var(--bs-body-bg);
+  vertical-align: bottom;
+}
+
+.table-scroll .time-cell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: var(--bs-body-bg);
+  white-space: nowrap;
+  border-right: var(--bs-border-width) solid var(--bs-border-color);
+}
+
+.table-scroll thead .time-cell {
+  z-index: 3;
+}
+
+/* In the header the series mark flows with the first line of the name */
+.table-scroll thead .series-marker {
+  margin: 0 0.25rem 0 0;
+  vertical-align: -0.1em;
+}
+
+.table-scroll tbody tr {
+  cursor: pointer;
+}
+
 /* The chart fills this box; Chart.js needs a parent with a set height */
 .chart-box {
   position: relative;

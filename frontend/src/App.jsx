@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getMeasurements, getSeries, MEASUREMENT_LIMIT } from './api.js'
 import MeasurementChart from './MeasurementChart.jsx'
+import MeasurementTable from './MeasurementTable.jsx'
 import SeriesFilter from './SeriesFilter.jsx'
 import { assignShapes } from './seriesStyle.js'
+import { tableRows } from './tableRows.js'
 import { rangeDates } from './timeRange.js'
 
 function App() {
@@ -13,6 +15,8 @@ function App() {
   const [range, setRange] = useState({ preset: 'all', fromDate: '', fromTime: '', toDate: '', toTime: '' })
   // The last answer for the measurements, together with the filters it was asked for
   const [result, setResult] = useState(null)
+  // The table row selected with a click, whose points the chart highlights
+  const [selectedKey, setSelectedKey] = useState(null)
 
   useEffect(() => {
     let ignore = false
@@ -74,6 +78,18 @@ function App() {
   )
   const showChart = selectedIds.length > 0 && !rangeError && shown?.measurements.length > 0
 
+  const rows = useMemo(() => (shown ? tableRows(shownSeries, shown.measurements) : []), [shownSeries, shown])
+  const selectedRow = rows.find((row) => row.key === selectedKey)
+  const highlightedIds = useMemo(
+    () => (selectedRow ? selectedRow.cells.filter((cell) => cell !== null).map((cell) => cell.id) : []),
+    [selectedRow],
+  )
+
+  // A second click on the selected row clears the selection
+  const selectRow = (key) => setSelectedKey(key === selectedKey ? null : key)
+  // A click on a point of the chart selects the row with that measurement
+  const selectPoint = (id) => setSelectedKey(rows.find((row) => row.cells.some((cell) => cell?.id === id))?.key ?? null)
+
   return (
     <>
       <header className="app-header">
@@ -95,28 +111,41 @@ function App() {
           <div className="dashboard">
             <SeriesFilter series={series} seriesLoaded={seriesLoaded} shapes={shapes} selectedIds={selectedIds}
               onSelectedIdsChange={setSelectedIds} range={range} onRangeChange={setRange} />
-
-            <section className="card border-0 shadow-sm rounded-4" aria-labelledby="chart-title">
-              <div className="card-body p-4">
-                <div className="d-flex align-items-center justify-content-between mb-3">
-                  <h2 id="chart-title" className="h5 mb-0">Chart</h2>
-                  {loading && <span role="status" className="small text-body-secondary">Loading…</span>}
+            <div className="dashboard-main">
+              <section className="card border-0 shadow-sm rounded-4" aria-labelledby="chart-title">
+                <div className="card-body p-4">
+                  <div className="d-flex align-items-center justify-content-between mb-3">
+                    <h2 id="chart-title" className="h5 mb-0">Chart</h2>
+                    {loading && <span role="status" className="small text-body-secondary">Loading…</span>}
+                  </div>
+                  {rangeError && <div className="alert alert-warning mb-0" role="alert">{rangeError}</div>}
+                  {!seriesLoaded && <p role="status" className="text-body-secondary mb-0">Loading…</p>}
+                  {seriesLoaded && !rangeError && selectedIds.length === 0 && <p className="mb-0">Select at least one series.</p>}
+                  {current && result.error && <div className="alert alert-danger mb-0" role="alert">{result.error}</div>}
+                  {current && !result.error && result.measurements.length === 0 && (
+                    <p className="mb-0">No measurements in this time range.</p>
+                  )}
+                  {showChart && (
+                    <MeasurementChart series={shownSeries} shapes={shapes} units={units} measurements={shown.measurements}
+                      highlightedIds={highlightedIds} onPointClick={selectPoint} />
+                  )}
+                  {showChart && shown.measurements.length === MEASUREMENT_LIMIT && (
+                    <p className="small text-body-secondary mt-2 mb-0">
+                      Showing the latest {MEASUREMENT_LIMIT} measurements, narrow the time range to see older ones.
+                    </p>
+                  )}
                 </div>
-                {rangeError && <div className="alert alert-warning mb-0" role="alert">{rangeError}</div>}
-                {!seriesLoaded && <p role="status" className="text-body-secondary mb-0">Loading…</p>}
-                {seriesLoaded && !rangeError && selectedIds.length === 0 && <p className="mb-0">Select at least one series.</p>}
-                {current && result.error && <div className="alert alert-danger mb-0" role="alert">{result.error}</div>}
-                {current && !result.error && result.measurements.length === 0 && (
-                  <p className="mb-0">No measurements in this time range.</p>
-                )}
-                {showChart && <MeasurementChart series={shownSeries} shapes={shapes} units={units} measurements={shown.measurements} />}
-                {showChart && shown.measurements.length === MEASUREMENT_LIMIT && (
-                  <p className="small text-body-secondary mt-2 mb-0">
-                    Showing the latest {MEASUREMENT_LIMIT} measurements, narrow the time range to see older ones.
-                  </p>
-                )}
-              </div>
-            </section>
+              </section>
+              {showChart && (
+                <section className="card border-0 shadow-sm rounded-4" aria-labelledby="table-title">
+                  <div className="card-body p-4">
+                    <h2 id="table-title" className="h5 mb-3">Measurements</h2>
+                    <MeasurementTable series={shownSeries} shapes={shapes} rows={rows} selectedKey={selectedKey}
+                      onSelect={selectRow} />
+                  </div>
+                </section>
+              )}
+            </div>
           </div>
         )}
       </main>

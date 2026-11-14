@@ -26,7 +26,7 @@ function chartData(series, shapes, measurements, allUnits) {
     // The API sends the newest first, a line needs the points in time order
     data: measurements
       .filter((measurement) => measurement.seriesId === item.id)
-      .map((measurement) => ({ x: new Date(measurement.timestamp), y: measurement.value }))
+      .map((measurement) => ({ x: new Date(measurement.timestamp), y: measurement.value, id: measurement.id }))
       .reverse(),
     borderColor: item.color,
     backgroundColor: item.color,
@@ -70,9 +70,14 @@ function chartData(series, shapes, measurements, allUnits) {
 }
 
 /** Line chart of the measurements, one line per series, with time on the x axis. */
-function MeasurementChart({ series, shapes, units, measurements }) {
+function MeasurementChart({ series, shapes, units, measurements, highlightedIds, onPointClick }) {
   const canvasRef = useRef(null)
   const chartRef = useRef(null)
+  // The chart is created once, so its click handler reads the latest callback from here
+  const onPointClickRef = useRef(onPointClick)
+  useEffect(() => {
+    onPointClickRef.current = onPointClick
+  })
 
   // Creates the chart once and removes it when the component is gone
   useEffect(() => {
@@ -82,6 +87,12 @@ function MeasurementChart({ series, shapes, units, measurements }) {
       options: {
         maintainAspectRatio: false,
         interaction: { mode: 'nearest', intersect: false },
+        onClick: (event, elements, chart) => {
+          if (elements.length > 0) {
+            const { datasetIndex, index } = elements[0]
+            onPointClickRef.current(chart.data.datasets[datasetIndex].data[index].id)
+          }
+        },
         plugins: {
           legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
           tooltip: {
@@ -110,6 +121,22 @@ function MeasurementChart({ series, shapes, units, measurements }) {
     chart.options.scales = scales
     chart.update()
   }, [series, shapes, units, measurements])
+
+  // Enlarges the points of the selected table row and shows their values (also after new data)
+  useEffect(() => {
+    const chart = chartRef.current
+    const active = []
+    chart.data.datasets.forEach((dataset, datasetIndex) => {
+      dataset.data.forEach((point, index) => {
+        if (highlightedIds.includes(point.id)) {
+          active.push({ datasetIndex, index })
+        }
+      })
+    })
+    chart.setActiveElements(active)
+    chart.tooltip.setActiveElements(active, { x: 0, y: 0 })
+    chart.update()
+  }, [highlightedIds, series, shapes, units, measurements])
 
   const seriesWithData = new Set(measurements.map((measurement) => measurement.seriesId))
   const empty = series.filter((item) => !seriesWithData.has(item.id))
