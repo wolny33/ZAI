@@ -107,9 +107,12 @@ function App() {
         {/* Without the series there is nothing to filter or show */}
         {seriesError && <div className="alert alert-danger" role="alert">{seriesError}</div>}
 
-        {!seriesError && (
+        {/* The panel appears at once with the list of series, so nothing has to move later */}
+        {!seriesLoaded && <p role="status" className="text-body-secondary">Loading…</p>}
+
+        {seriesLoaded && !seriesError && (
           <div className="dashboard">
-            <SeriesFilter series={series} seriesLoaded={seriesLoaded} shapes={shapes} selectedIds={selectedIds}
+            <SeriesFilter series={series} shapes={shapes} selectedIds={selectedIds}
               onSelectedIdsChange={setSelectedIds} range={range} onRangeChange={setRange} />
             <div className="dashboard-main">
               <section className="card border-0 shadow-sm rounded-4" aria-labelledby="chart-title">
@@ -119,12 +122,13 @@ function App() {
                     {loading && <span role="status" className="small text-body-secondary">Loading…</span>}
                   </div>
                   {rangeError && <div className="alert alert-warning mb-0" role="alert">{rangeError}</div>}
-                  {!seriesLoaded && <p role="status" className="text-body-secondary mb-0">Loading…</p>}
-                  {seriesLoaded && !rangeError && selectedIds.length === 0 && <p className="mb-0">Select at least one series.</p>}
+                  {!rangeError && selectedIds.length === 0 && <p className="mb-0">Select at least one series.</p>}
                   {current && result.error && <div className="alert alert-danger mb-0" role="alert">{result.error}</div>}
                   {current && !result.error && result.measurements.length === 0 && (
                     <p className="mb-0">No measurements in this time range.</p>
                   )}
+                  {/* Keeps the place of the chart while the first measurements load */}
+                  {loading && !showChart && <div className="chart-box" />}
                   {showChart && (
                     <MeasurementChart series={shownSeries} shapes={shapes} units={units} measurements={shown.measurements}
                       highlightedIds={highlightedIds} onPointClick={selectPoint} />

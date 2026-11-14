@@ -145,3 +145,7 @@ body {
   /* Keeps the mark next to the first line of a long name */
   margin-top: 0.3em;
 }
+
+html {
+  scrollbar-gutter: stable;
+}

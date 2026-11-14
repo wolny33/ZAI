@@ -19,7 +19,7 @@ function DateTimeField({ id, label, range, onRangeChange, dateKey, timeKey }) {
 }
 
 /** Filters of the view: time range (a preset or own dates) and the visible series. */
-function SeriesFilter({ series, seriesLoaded, shapes, selectedIds, onSelectedIdsChange, range, onRangeChange }) {
+function SeriesFilter({ series, shapes, selectedIds, onSelectedIdsChange, range, onRangeChange }) {
   function toggleSeries(id) {
     onSelectedIdsChange(selectedIds.includes(id) ? selectedIds.filter((other) => other !== id) : [...selectedIds, id])
   }
@@ -58,8 +58,7 @@ function SeriesFilter({ series, seriesLoaded, shapes, selectedIds, onSelectedIds
               onClick={() => onSelectedIdsChange(series.map((item) => item.id))}>All</button>
             <button type="button" className="btn btn-link btn-sm p-0" onClick={() => onSelectedIdsChange([])}>None</button>
           </div>
-          {!seriesLoaded && <p role="status" className="small text-body-secondary mb-0">Loading…</p>}
-          {seriesLoaded && series.length === 0 && <p className="small mb-0">No series yet.</p>}
+          {series.length === 0 && <p className="small mb-0">No series yet.</p>}
           {series.map((item) => (
             <div key={item.id} className="form-check">
               <input
